@@ -36,6 +36,15 @@ docs/spec/
 # Backup files
 *.bak
 *~
+
 # WeChat DevTools private config
 project.private.config.json
+
+# WeChat Cloud Base config (contains environment IDs)
+cloudbaserc.json
+mini_program/cloudbaserc.json
+
+# Temp / scratch files
+temp_skill_md/
+*.ps1
 

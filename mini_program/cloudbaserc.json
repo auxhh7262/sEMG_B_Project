@@ -1,0 +1,19 @@
+{
+  "$schema": "https://static.cloudbase.net/cli/cloudbaserc.schema.json",
+  "envId": "cloud1-d4gqmimmo05b12c94",
+  "functionRoot": "./cloudfunctions",
+  "functions": [
+    {
+      "name": "deviceRegister",
+      "timeout": 10,
+      "runtime": "Nodejs18.15",
+      "handler": "index.main"
+    },
+    {
+      "name": "dataIngest",
+      "timeout": 20,
+      "runtime": "Nodejs18.15",
+      "handler": "index.main"
+    }
+  ]
+}

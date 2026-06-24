@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "openapi": []
+  },
+  "runtime": "Nodejs18.15",
+  "memory": 256,
+  "timeout": 5,
+  "triggers": [
+    {
+      "name": "httpTrigger",
+      "type": "http",
+      "config": "{\"path\":\"/\",\"method\":[\"POST\"]}"
+    }
+  ]
+}

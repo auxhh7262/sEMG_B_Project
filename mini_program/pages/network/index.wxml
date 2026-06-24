@@ -1,0 +1,98 @@
+<!--
+  pages/network/index.wxml — V3.0 Simplified Provisioning UI
+  配网流程: 扫描设备 → 连接 → 读 deviceId → 输入密码 → 等待结果 → 完成
+-->
+<view class="container">
+  <!-- Status card -->
+  <view class="status-card">
+    <view class="status-indicator {{status}}"></view>
+    <view class="status-info">
+      <text class="status-title">{{statusMsg}}</text>
+      <text class="status-sub" wx:if="{{deviceId}}">Device: {{deviceId}}</text>
+      <text class="status-sub" wx:if="{{ip}}">IP: {{ip}}</text>
+    </view>
+  </view>
+
+  <!-- 设备未连接时: 扫描按钮 -->
+  <view class="action-section" wx:if="{{!connected && !configured}}">
+    <button class="btn-primary" bindtap="startScan" disabled="{{status === 'scanning'}}">
+      {{status === 'scanning' ? '扫描中...' : '扫描设备'}}
+    </button>
+    <text class="hint" wx:if="{{status === 'idle'}}">请确保设备已通电并处于配网模式</text>
+  </view>
+
+  <!-- BLE 已连接但未配网: 输入 WiFi 信息 -->
+  <view class="config-section" wx:if="{{connected && !configured && !showPassInput}}">
+    <view class="device-info">
+      <text class="label">设备名称</text>
+      <text class="value">{{bleDeviceName}}</text>
+    </view>
+    <view class="device-info">
+      <text class="label">设备 ID</text>
+      <text class="value">{{deviceId || '(读取中...)'}}</text>
+    </view>
+    <button class="btn-primary" bindtap="startConfig">配置 WiFi</button>
+  </view>
+
+  <!-- WiFi 密码输入 -->
+  <view class="config-section" wx:if="{{showPassInput}}">
+    <view class="input-group">
+      <text class="label">WiFi SSID</text>
+      <input class="input" placeholder="输入 WiFi 名称" value="{{wifiConnected}}" bindinput="onWifiSsidsChange"/>
+    </view>
+    <view class="input-group">
+      <text class="label">WiFi 密码</text>
+      <input class="input" type="password" placeholder="输入 WiFi 密码" value="{{wifiPass}}" bindinput="onPassInput" password/>
+    </view>
+    <view class="btn-row">
+      <button class="btn-secondary" bindtap="cancelConfig">取消</button>
+      <button class="btn-primary" bindtap="confirmConfig" disabled="{{status === 'configuring' || !wifiConnected || !wifiPass}}">
+        {{status === 'configuring' ? '发送中...' : '确认配置'}}
+      </button>
+    </view>
+  </view>
+
+  <!-- 配网进度条 -->
+  <view class="progress-section" wx:if="{{provisionStep}}">
+    <view class="step {{provisionStep === 'connecting_ble' ? 'active' : (provisionStep === 'writing_ssid' || provisionStep === 'writing_pass' || provisionStep === 'waiting_wifi' || provisionStep === 'done' ? 'done' : '')}}">
+      <view class="step-dot"></view>
+      <text class="step-text">连接设备</text>
+    </view>
+    <view class="step-line"></view>
+    <view class="step {{provisionStep === 'writing_ssid' ? 'active' : (provisionStep === 'writing_pass' || provisionStep === 'waiting_wifi' || provisionStep === 'done' ? 'done' : '')}}">
+      <view class="step-dot"></view>
+      <text class="step-text">发送凭证</text>
+    </view>
+    <view class="step-line"></view>
+    <view class="step {{provisionStep === 'waiting_wifi' ? 'active' : (provisionStep === 'done' ? 'done' : '')}}">
+      <view class="step-dot"></view>
+      <text class="step-text">连接 WiFi</text>
+    </view>
+  </view>
+
+  <!-- 已配网: 显示连接信息 + 操作按钮 -->
+  <view class="connected-section" wx:if="{{configured}}">
+    <view class="device-info">
+      <text class="label">设备 IP</text>
+      <text class="value">{{ip || '(获取中...)'}}</text>
+    </view>
+    <view class="device-info">
+      <text class="label">WiFi</text>
+      <text class="value">{{ssid || wifiConnected}}</text>
+    </view>
+    <view class="btn-row">
+      <button class="btn-secondary" bindtap="refreshStatus">刷新状态</button>
+      <button class="btn-danger" bindtap="resetConfig">重置 WiFi</button>
+    </view>
+  </view>
+
+  <!-- 配网说明 -->
+  <view class="help-section">
+    <text class="help-title">配网说明</text>
+    <text class="help-text">1. 确保 sEMG 设备已通电，LED 灯常亮</text>
+    <text class="help-text">2. 设备首次使用或网络变更时，自动进入配网模式</text>
+    <text class="help-text">3. 点击「扫描设备」搜索附近的 sEMG 设备</text>
+    <text class="help-text">4. 连接后输入 2.4GHz WiFi 的 SSID 和密码</text>
+    <text class="help-text">5. 设备连接 WiFi 后会自动关闭蓝牙广播</text>
+  </view>
+</view>

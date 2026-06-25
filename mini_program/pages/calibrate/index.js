@@ -38,12 +38,14 @@ Page({
   _calibPhase: 'idle',
 
   onLoad() {
+    logger.log('[calibrate] onLoad');
     this._initDeviceId();
     this._loadUserProfile();
     this._loadCalibData();
   },
 
   onShow() {
+    logger.log('[calibrate] onShow');
     this._loadUserProfile();
     this._checkCloudStatus();
   },

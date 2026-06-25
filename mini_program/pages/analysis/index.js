@@ -27,10 +27,17 @@ Page({
   _chartCtxFat: null, _dprFat: 1, _wFat: 0, _hFat: 0,
   _tabVisible: false,
 
-  onLoad() { this._initDateRange(); this._initCanvases(); },
+  onLoad() {
+    const { log } = require('../../utils/logger');
+    log('[analysis] onLoad');
+    this._initDateRange();
+    this._initCanvases();
+  },
   onUnload() {},
 
   onShow() {
+    const { log } = require('../../utils/logger');
+    log('[analysis] onShow');
     this._tabVisible = true;
     this._checkCloudStatus();
   },

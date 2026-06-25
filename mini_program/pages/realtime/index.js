@@ -51,9 +51,41 @@ Page({
       return;
     }
 
-    const db = wx.cloud.database({ env: CLOUD_ENV });
-    this.setData({ connected: true });
-    this._watchDataPoints(db);
+    // 检查云开发是否已初始化，如果未完成则等待重试
+    this._ensureCloudReady().then(() => {
+      const db = wx.cloud.database({ env: CLOUD_ENV });
+      this.setData({ connected: true });
+      this._watchDataPoints(db);
+    }).catch(e => {
+      error('[realtime] Cloud not ready:', e);
+      this.setData({ connected: false });
+    });
+  },
+
+  _ensureCloudReady() {
+    return new Promise((resolve, reject) => {
+      let retry = 0;
+      const check = () => {
+        // 尝试获取数据库引用，如果能获取说明已初始化
+        try {
+          const db = wx.cloud.database({ env: CLOUD_ENV });
+          if (db) {
+            log('[realtime] Cloud ready');
+            resolve();
+          } else {
+            throw new Error('db is null');
+          }
+        } catch (e) {
+          retry++;
+          if (retry > 10) {
+            reject(new Error('Cloud init timeout'));
+          } else {
+            setTimeout(check, 500);
+          }
+        }
+      };
+      check();
+    });
   },
 
   _watchDataPoints(db) {

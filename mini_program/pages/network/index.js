@@ -6,6 +6,7 @@
 //   - 设备 ID 以固件真实 deviceId 为准
 //   - 删除 IP notify 特征 (19B10003) 相关逻辑
 
+const { log, warn, error } = require('../../utils/logger');
 const CLOUD_URL = 'https://cloud1-d4gqmimmo05b12c94.service.tcloudbase.com';
 
 // BLE UUID 常量 (与固件 V3.0 一致)
@@ -34,6 +35,27 @@ Page({
   },
 
   onLoad() {
+    log('[network] Cloud onLoad');
+    // 测试1: 直接发送到 /log 端点
+    wx.request({
+      url: 'http://192.168.137.1:9876/log',
+      method: 'POST',
+      header: { 'content-type': 'application/json' },
+      data: { logs: [{ level: 'log', msg: '[NETWORK] TEST1 - direct /log POST', time: new Date().toLocaleTimeString('zh-CN', { hour12: false }) }] },
+      success(res) { console.log('[NETWORK] TEST1 OK status=' + res.statusCode); },
+      fail(err) { console.log('[NETWORK] TEST1 FAIL ' + err.errMsg); }
+    });
+    
+    // 测试2: 发送到 /health 端点（确认网络通）
+    wx.request({
+      url: 'http://192.168.137.1:9876/health',
+      method: 'GET',
+      success(res) { console.log('[NETWORK] TEST2 health OK', res.data); },
+      fail(err) { console.log('[NETWORK] TEST2 health FAIL', err.errMsg); }
+    });
+    console.log('[network] ========== 页面加载 ==========');
+    console.log('[network] 测试日志 - 如果你能在GUI窗口看到这条消息，说明日志系统工作正常');
+    
     this._deviceId = '';
     this._bleDeviceId = '';
     this._retryTimer = null;
@@ -46,6 +68,7 @@ Page({
   },
 
   onUnload() {
+    log('[network] onUnload');
     this._cleanup();
   },
 

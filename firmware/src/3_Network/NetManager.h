@@ -17,8 +17,8 @@
 #define CLOUD_URL_ACK_COMMAND       "http://" CLOUD_BASE_DOMAIN "/ackDeviceCommand"
 
 // 上传参数
-#define INGEST_BATCH_FRAMES    30    // 每批上传帧数 (3秒 @ 10Hz)
-#define INGEST_RETRY_QUEUE     120   // 断网重试队列最大帧数
+#define INGEST_BATCH_FRAMES    10    // 每批上传帧数 (1秒 @ 10Hz)
+#define INGEST_RETRY_QUEUE     150   // 断网重试队列最大帧数 (15秒缓存)
 #define WIFI_RETRY_INTERVAL    10000 // WiFi 重连间隔(ms)
 
 class NetManager {
@@ -27,7 +27,8 @@ public:
 
     bool initBlocking(uint32_t wifiTimeoutMs = 30000);
     void tick();
-    bool pushDataPoint(uint32_t ts, float rms, float act, float mdf,
+    // 云端使用服务器时间，无需上传 ts 字段
+    bool pushDataPoint(float rms, float act, float mdf,
                        float fatigue, uint8_t quality);
     void uploadCalibration(float relaxRms, float relaxMdf,
                            float activeRms, float activeMdf);
@@ -39,6 +40,11 @@ public:
     void onResetWifi(void (*cb)()) { _onResetWifi = cb; }
     void onWifiLostTimeout(void (*cb)()) { _onWifiLostTimeout = cb; }
 
+    // 校准命令回调
+    void onRecordRelax(void (*cb)()) { _onRecordRelax = cb; }
+    void onRecordActive(void (*cb)()) { _onRecordActive = cb; }
+    void onSaveCalib(void (*cb)()) { _onSaveCalib = cb; }
+
 private:
     void _wifiTick();
     void _checkIngest();
@@ -49,7 +55,6 @@ private:
     uint32_t _wifiRetryTimer;
 
     struct DataPoint {
-        uint32_t ts;
         float rms, act, mdf, fatigue;
         uint8_t quality;
     };
@@ -63,6 +68,7 @@ private:
     char _jsonBuf[2048];
     char _deviceId[20];
     char _sessionId[40];
+    char _lastCommandId[64];  // track pending command for ack
     bool _sessionActive;
 
     float _relaxRms, _relaxMdf, _activeRms, _activeMdf;
@@ -79,6 +85,9 @@ private:
 
     void (*_onResetWifi)();
     void (*_onWifiLostTimeout)();
+    void (*_onRecordRelax)();
+    void (*_onRecordActive)();
+    void (*_onSaveCalib)();
     uint32_t _wifiDisconnectedSince;
 };
 

@@ -25,7 +25,7 @@ void AppController::init(void)
         _signalProc->setRelaxBaseline(calib.relax_rms_mv, calib.relax_mdf_hz);
         LOG("[CTRL] Boot: loaded calib relax_mdf=%.1f\n", calib.relax_mdf_hz);
     } else {
-        LOG("[CTRL] Boot: no calib in A zone\n");
+        LOG("[CTRL] Boot: no calib in EEPROM\n");
     }
 
     _stateMgr->transitionTo(ST_RUNNING);
@@ -86,10 +86,10 @@ void AppController::tick(void)
     // ===== Cloud data upload =====
     SystemState_t curState = _stateMgr->getState();
     if (rms > 0.0f && curState == ST_RUNNING) {
-        uint32_t ts = millis();
-        _netMgr->pushDataPoint(ts, rms, activation, mdf, fatigue, quality);
+        // 云端使用服务器时间，无需上传 ts 字段
+        _netMgr->pushDataPoint(rms, activation, mdf, fatigue, quality);
 
-        // 限频日志
+        // 限频日志（显示相对运行时间）
         const char* phaseTag = "";
         if (_calibPhase == CALIB_RELAX) phaseTag = " [CALIB:RELAX]";
         else if (_calibPhase == CALIB_ACTIVE) phaseTag = " [CALIB:ACTIVE]";
@@ -97,6 +97,7 @@ void AppController::tick(void)
         static uint16_t _dataLogCounter = 0;
         if (++_dataLogCounter >= 60) {
             _dataLogCounter = 0;
+            uint32_t ts = millis();
             unsigned int s = ts / 1000, ms = ts % 1000;
             unsigned int mm = (s / 60) % 60, ss = s % 60;
             LOG("[DATA]%s %02u:%02u.%03u rms=%.3f act=%.1f%% mdf=%.1f fatigue=%.1f%% q=%u\n",
@@ -192,7 +193,7 @@ void AppController::handleSaveCalib(int userScore,
 
     // Step 2: 仅个人信息 (no userScore)
     if (userScore < 0) {
-        // SetUserProfile() 已直接写EEPROM，无需FlushAZone
+        // SetUserProfile() 已直接写EEPROM，无需额外操作
         LOG("[CTRL] Profile-only save: OK\n");
         return;
     }

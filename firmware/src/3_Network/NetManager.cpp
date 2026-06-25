@@ -17,10 +17,14 @@ NetManager::NetManager()
     , _lastStatusReport(0)
     , _onResetWifi(nullptr)
     , _onWifiLostTimeout(nullptr)
+    , _onRecordRelax(nullptr)
+    , _onRecordActive(nullptr)
+    , _onSaveCalib(nullptr)
     , _wifiDisconnectedSince(0)
 {
     memset(_deviceId, 0, sizeof(_deviceId));
     memset(_sessionId, 0, sizeof(_sessionId));
+    memset(_lastCommandId, 0, sizeof(_lastCommandId));
 }
 
 void NetManager::_genDeviceId(char* buf, size_t len) {
@@ -122,11 +126,11 @@ void NetManager::_wifiTick() {
     }
 }
 
-bool NetManager::pushDataPoint(uint32_t ts, float rms, float act,
+// 云端使用服务器时间，无需上传 ts 字段
+bool NetManager::pushDataPoint(float rms, float act,
                                 float mdf, float fatigue, uint8_t quality) {
     if (_retryCount < INGEST_RETRY_QUEUE) {
         uint8_t idx = (_retryHead + _retryCount) % INGEST_RETRY_QUEUE;
-        _retryQueue[idx].ts = ts;
         _retryQueue[idx].rms = rms;
         _retryQueue[idx].act = act;
         _retryQueue[idx].mdf = mdf;
@@ -136,7 +140,6 @@ bool NetManager::pushDataPoint(uint32_t ts, float rms, float act,
     }
 
     if (_batchCount < INGEST_BATCH_FRAMES) {
-        _batchBuffer[_batchCount].ts = ts;
         _batchBuffer[_batchCount].rms = rms;
         _batchBuffer[_batchCount].act = act;
         _batchBuffer[_batchCount].mdf = mdf;
@@ -160,14 +163,12 @@ void NetManager::_checkIngest() {
 
     _jsonBuf[0] = '\0';
     int pos = snprintf(_jsonBuf, sizeof(_jsonBuf),
-             "{\"session_id\":\"%s\",\"device_id\":\"%s\",\"points\":[",
-             _sessionActive ? _sessionId : "", _deviceId);
+             "{\"points\":[");
 
     for (uint8_t i = 0; i < _batchCount; i++) {
         if (i > 0) pos += snprintf(_jsonBuf + pos, sizeof(_jsonBuf) - pos, ",");
         pos += snprintf(_jsonBuf + pos, sizeof(_jsonBuf) - pos,
-                 "{\"ts\":%lu,\"rms\":%d,\"act\":%d,\"mdf\":%d,\"fatigue\":%d,\"quality\":%d}",
-                 _batchBuffer[i].ts,
+                 "[%d,%d,%d,%d,%d]",
                  (int)(_batchBuffer[i].rms * 1000),
                  (int)(_batchBuffer[i].act * 10),
                  (int)(_batchBuffer[i].mdf * 10),
@@ -306,31 +307,38 @@ void NetManager::tick() {
 }
 
 void NetManager::_checkCommand() {
-    WiFiClient client;
+    // POST {"device_id":"..."} to get pending command
+    char jsonBody[128];
+    snprintf(jsonBody, sizeof(jsonBody),
+             "{\"device_id\":\"%s\"}", _deviceId);
 
     char host[128];
     const char* url = CLOUD_URL_GET_COMMAND;
-    const char* hostStart = url + 7;
+    const char* hostStart = strstr(url, "://") + 3;
     const char* pathStart = strchr(hostStart, '/');
     int hostLen = pathStart ? (pathStart - hostStart) : (int)strlen(hostStart);
     if (hostLen > 127) hostLen = 127;
     memcpy(host, hostStart, hostLen);
     host[hostLen] = '\0';
+    const char* path = pathStart ? pathStart : "/";
 
+    WiFiClient client;
     if (!client.connect(host, 80)) {
         LOG("[NET] TCP connect FAIL for command check\n");
         return;
     }
 
-    char req[512];
+    char req[384];
     int reqLen = snprintf(req, sizeof(req),
-        "GET %s HTTP/1.1\r\n"
+        "POST %s HTTP/1.1\r\n"
         "Host: %s\r\n"
+        "Content-Type: application/json\r\n"
+        "Content-Length: %d\r\n"
         "Connection: close\r\n"
         "\r\n",
-        pathStart ? pathStart : "/", host);
-
+        path, host, (int)strlen(jsonBody));
     client.write((const uint8_t*)req, reqLen);
+    client.write((const uint8_t*)jsonBody, strlen(jsonBody));
     client.flush();
 
     unsigned long t0 = millis();
@@ -353,21 +361,41 @@ void NetManager::_checkCommand() {
     }
     client.stop();
 
-    if (body.length() > 0) {
-        int cmdIdx = body.indexOf("\"command\"");
-        if (cmdIdx > 0) {
-            int cmdStart = body.indexOf(':', cmdIdx);
-            if (cmdStart > 0) {
-                int valStart = body.indexOf('"', cmdStart);
-                int valEnd = body.indexOf('"', valStart + 1);
-                if (valStart > 0 && valEnd > valStart) {
-                    String cmd = body.substring(valStart + 1, valEnd);
-                    LOG("[NET] Received command: %s\n", cmd.c_str());
-                    _executeCommand(cmd.c_str(), "");
-                }
+    if (body.length() == 0) return;
+
+    // Parse response: {"code":0,"command":{"id":"...","command":"..."}}
+    char cmdId[64] = {0};
+    char cmdName[64] = {0};
+
+    int idIdx = body.indexOf("\"id\"");
+    if (idIdx > 0) {
+        int colonIdx = body.indexOf(':', idIdx);
+        if (colonIdx > 0) {
+            int q1 = body.indexOf('"', colonIdx);
+            int q2 = body.indexOf('"', q1 + 1);
+            if (q1 > 0 && q2 > q1) {
+                String tmp = body.substring(q1 + 1, q2);
+                strncpy(cmdId, tmp.c_str(), sizeof(cmdId) - 1);
             }
         }
     }
+
+    int cmdIdx = body.indexOf("\"command\"");
+    if (cmdIdx < 0) return;
+    int colonIdx = body.indexOf(':', cmdIdx);
+    if (colonIdx < 0) return;
+    int q1 = body.indexOf('"', colonIdx);
+    int q2 = body.indexOf('"', q1 + 1);
+    if (q1 < 0 || q2 < 0) return;
+    String tmp = body.substring(q1 + 1, q2);
+    strncpy(cmdName, tmp.c_str(), sizeof(cmdName) - 1);
+
+    LOG("[NET] Received command: %s (id=%s)\n", cmdName, cmdId);
+    _lastCommandId[0] = '\0';
+    if (strlen(cmdId) > 0) {
+        strncpy(_lastCommandId, cmdId, sizeof(_lastCommandId) - 1);
+    }
+    _executeCommand(cmdName, "");
 }
 
 void NetManager::_executeCommand(const char* command, const char* paramsJson) {
@@ -383,8 +411,32 @@ void NetManager::_executeCommand(const char* command, const char* paramsJson) {
         LOG("[NET] Refreshing status...\n");
         _reportStatus();
     }
+    else if (strcmp(command, "record_relax") == 0) {
+        LOG("[NET] Executing record_relax via callback\n");
+        if (_onRecordRelax) {
+            _onRecordRelax();
+        }
+    }
+    else if (strcmp(command, "record_active") == 0) {
+        LOG("[NET] Executing record_active via callback\n");
+        if (_onRecordActive) {
+            _onRecordActive();
+        }
+    }
+    else if (strcmp(command, "save_calib") == 0) {
+        LOG("[NET] Executing save_calib via callback\n");
+        if (_onSaveCalib) {
+            _onSaveCalib();
+        }
+    }
     else {
         LOG("[NET] Unknown command: %s\n", command);
+    }
+
+    // Acknowledge command after execution
+    if (strlen(_lastCommandId) > 0) {
+        _ackCommand(_lastCommandId);
+        _lastCommandId[0] = '\0';
     }
 }
 

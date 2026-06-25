@@ -65,7 +65,7 @@ Page({
     });
   },
 
-  // ==================== Cloud DB Query ====================
+  // ==================== Cloud Function Query ====================
   async _loadData() {
     if (this.data.isLoading) return;
     if (!wx.cloud) {
@@ -77,32 +77,34 @@ Page({
     this.setData({ isLoading: true, errorMsg: '', isEmpty: false });
 
     try {
-      const db = wx.cloud.database({ env: CLOUD_ENV });
-      const startTs = new Date(startDate + 'T00:00:00').getTime();
-      const endTs = new Date(endDate + 'T23:59:59').getTime();
+      // 调用云函数查询数据（突破小程序端 20 条限制）
+      const res = await wx.cloud.callFunction({
+        name: 'queryDataPoints',
+        data: {
+          startDate,
+          endDate
+          // 不传 targetPoints：使用云端默认 2000 点降采样
+        }
+      });
 
-      // Query data_points within date range
-      const MAX_POINTS = 500;
-      const res = await db.collection('data_points')
-        .where({
-          timestamp: db.command.gte(startTs).and(db.command.lte(endTs))
-        })
-        .orderBy('timestamp', 'asc')
-        .limit(MAX_POINTS)
-        .get();
+      if (res.result.code !== 0) {
+        throw new Error(res.result.msg);
+      }
 
-      if (!res.data || res.data.length === 0) {
+      const data = res.result.data;
+      if (!data || data.length === 0) {
         this.setData({ isLoading: false, isEmpty: true, errorMsg: '暂无监测数据' });
         return;
       }
 
-      const pts = res.data.map(d => ({
-        mdf: d.mdf || 0,
-        fatigue: d.fatigue || 0
+      // 数据格式转换（云函数返回的数据已经是完整格式）
+      const pts = data.map(d => ({
+        mdf: (d.mdf || 0) / 10,          // MDF: 整数 → Hz（1位小数）
+        fatigue: (d.fatigue || 0) / 10,  // Fatigue: 整数 → %（1位小数）
       }));
 
-      const firstTs = res.data[0].timestamp;
-      const lastTs = res.data[res.data.length - 1].timestamp;
+      const firstTs = data[0].timestamp;
+      const lastTs = data[data.length - 1].timestamp;
 
       const summary = this._calcSummary(pts);
 
@@ -112,11 +114,11 @@ Page({
         _chartPoints: pts,
         _startTsMs: firstTs,
         _endTsMs: lastTs,
-        totalMatches: res.data.length,
+        totalMatches: data.length,
       });
 
       if (this._tabVisible) {
-        wx.showToast({ title: '共 ' + res.data.length + ' 条数据', icon: 'none', duration: 2000 });
+        wx.showToast({ title: '共 ' + data.length + ' 条数据', icon: 'none', duration: 2000 });
       }
 
       setTimeout(() => {

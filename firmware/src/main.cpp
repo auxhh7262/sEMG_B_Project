@@ -61,6 +61,22 @@ static void _onWifiLostTimeout() {
     // resetNetwork() 内部已清除凭证 + 断开WiFi + 重启广播
 }
 
+// [V3.0] 校准命令回调
+static void _onCloudRecordRelax() {
+    LOG("[MAIN] Cloud record_relax command\n");
+    gAppController.handleRecordRelax();
+}
+
+static void _onCloudRecordActive() {
+    LOG("[MAIN] Cloud record_active command\n");
+    gAppController.handleRecordActive();
+}
+
+static void _onCloudSaveCalib() {
+    LOG("[MAIN] Cloud save_calib command\n");
+    gAppController.handleSaveCalib();
+}
+
 // [V3.0] WiFi 凭证配网处理 — 非阻塞状态机
 static bool     _besConnecting = false;
 static uint32_t _besConnectStart = 0;
@@ -166,6 +182,9 @@ void setup() {
     // [V3.0] 注册回调
     gNetManager.onResetWifi(_onCloudResetWifi);
     gNetManager.onWifiLostTimeout(_onWifiLostTimeout);
+    gNetManager.onRecordRelax(_onCloudRecordRelax);
+    gNetManager.onRecordActive(_onCloudRecordActive);
+    gNetManager.onSaveCalib(_onCloudSaveCalib);
 
     if (netOk) {
         // WiFi 从 EEPROM/硬编码连接成功 → 关闭 BLE，正常运行

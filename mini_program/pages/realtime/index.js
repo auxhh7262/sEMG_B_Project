@@ -52,38 +52,13 @@ Page({
     }
 
     const db = wx.cloud.database({ env: CLOUD_ENV });
-
-    // 1. 获取当前活跃 session
-    db.collection('sessions')
-      .where({ status: 'active' })
-      .orderBy('started_at', 'desc')
-      .limit(1)
-      .get()
-      .then(res => {
-        if (res.data && res.data.length > 0) {
-          this._sessionId = res.data[0].session_id;
-          log('[realtime] Found active session:', this._sessionId);
-          this.setData({ connected: true });
-          this._watchDataPoints(db);
-        } else {
-          warn('[realtime] No active session found');
-          this.setData({ connected: false });
-        }
-      })
-      .catch(e => {
-        error('[realtime] Failed to find session:', e);
-        this.setData({ connected: false });
-      });
+    this.setData({ connected: true });
+    this._watchDataPoints(db);
   },
 
   _watchDataPoints(db) {
-    if (!this._sessionId) return;
-
-    // Watch data_points for current session
+    // 直接 watch data_points 集合的最新数据（不需要 session_id）
     this._watcher = db.collection('data_points')
-      .where({
-        session_id: this._sessionId
-      })
       .orderBy('timestamp', 'desc')
       .limit(1)
       .watch({
@@ -111,7 +86,7 @@ Page({
   // ==================== Data Processing ====================
   _onDataPoint(pt) {
     try {
-      const { timestamp: ts, rms, act, mdf, fatigue, quality } = pt;
+      const { timestamp: ts, rms, activation, mdf, fatigue, quality } = pt;
 
       let timeStr = '--';
       if (ts != null) {
@@ -121,14 +96,14 @@ Page({
           String(date.getSeconds()).padStart(2, '0')}`;
       }
 
-      const actPct = act != null ? Math.max(0, Math.min(100, act)) : null;
-      const fatPct = fatigue != null ? Math.max(0, Math.min(100, fatigue)) : null;
+      const actPct = activation != null ? Math.max(0, Math.min(100, activation / 10)) : null;
+      const fatPct = fatigue != null ? Math.max(0, Math.min(100, fatigue / 10)) : null;
 
       const histRow = {
         time: timeStr,
-        rms: (rms || 0).toFixed(3),
+        rms: (rms / 1000 || 0).toFixed(3),
         act: actPct != null ? actPct.toFixed(1) + '%' : '--',
-        mdf: (mdf || 0).toFixed(1),
+        mdf: (mdf / 10 || 0).toFixed(1),
         fat: fatPct != null ? fatPct.toFixed(1) + '%' : '--',
         q: quality != null ? quality + '%' : '--'
       };
@@ -148,9 +123,9 @@ Page({
         });
       }
 
-      log('[realtime] ts=' + ts + ' rms=' + (rms || 0).toFixed(3) + 
+      log('[realtime] ts=' + ts + ' rms=' + (rms / 1000 || 0).toFixed(3) + 
         ' act=' + (actPct != null ? actPct.toFixed(1) + '%' : '--') +
-        ' mdf=' + (mdf || 0).toFixed(1) +
+        ' mdf=' + (mdf / 10 || 0).toFixed(1) +
         ' fatigue=' + (fatPct != null ? fatPct.toFixed(1) + '%' : '--'));
     } catch (e) {
       error('[realtime] _onDataPoint crash:', e);

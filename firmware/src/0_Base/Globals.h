@@ -12,9 +12,7 @@ typedef enum {
     ERROR_SIGNAL_NOISE,   // 信号干扰
     ERROR_ARM_TIMEOUT,    // 等待超时
     ERROR_BODY_MOVE,      // 肢体乱动
-    ERROR_CALIB_DRIFT,    // 佩戴松动
-    ERROR_FLASH_FULL,     // 存储已满
-    ERROR_FLASH_IO        // 读写故障
+    ERROR_CALIB_DRIFT     // 佩戴松动
 } SystemError_t;
 
 // 2. 系统状态枚举 (M3 阶段简化版状态机，为后续完整 SOP 预留扩展)
@@ -41,7 +39,6 @@ typedef enum {
     CMD_NONE = 0,
     CMD_STOP,
     CMD_GET_STATUS,
-    CMD_QUERY_CZ,
     CMD_START_STREAM
 } AppCommand_t;
 

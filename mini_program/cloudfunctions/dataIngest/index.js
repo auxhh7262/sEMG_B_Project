@@ -2,10 +2,10 @@
 const cloud = require('wx-server-sdk');
 cloud.init({ env: 'cloud1-d4gqmimmo05b12c94' });
 const db = cloud.database();
-const _ = db.command;
 
 const BATCH_MAX = 100; // 单次最多写入 100 条
 
+// 字段顺序固定：[rms, activation, mdf, fatigue, quality]
 exports.main = async (event, context) => {
   console.log('[dataIngest] RAW event:', JSON.stringify(event));
 
@@ -22,32 +22,38 @@ exports.main = async (event, context) => {
     return { code: 400, msg: 'invalid JSON body' };
   }
 
-  const { session_id, device_id, points } = body;
+  const { points } = body;
 
-  if (!session_id || !points || !Array.isArray(points)) {
-    return { code: 400, msg: 'missing session_id or points array' };
+  if (!points || !Array.isArray(points)) {
+    return { code: 400, msg: 'missing points array' };
   }
 
   try {
     const coll = db.collection('data_points');
+    const serverTime = Date.now();
+    const now = serverTime;
 
     // 分批写入（微信云单次最多 100 条）
     let written = 0;
+
     for (let i = 0; i < points.length; i += BATCH_MAX) {
       const batch = points.slice(i, i + BATCH_MAX);
-      const ops = batch.map(p => coll.add({
-        data: {
-          session_id,
-          device_id: device_id || '',
-          timestamp: p.ts,
-          rms: p.rms || 0,
-          act: p.act || 0,
-          mdf: p.mdf || 0,
-          fatigue: p.fatigue || 0,
-          quality: p.quality || 0,
-          created_at: Date.now()
-        }
-      }));
+      const ops = batch.map((point, idx) => {
+        // point 格式固定：[rms*1000, activation*10, mdf*10, fatigue*10, quality]
+        const [rmsRaw, activationRaw, mdfRaw, fatigueRaw, qualityRaw] = point;
+        const timestamp = now + (i + idx) * 100; // 每帧间隔 100ms
+        return coll.add({
+          data: {
+            timestamp,
+            rms: rmsRaw || 0,              // 存原始整数（×1000），页面负责 /1000 显示
+            activation: activationRaw || 0,  // 存原始整数（×10）
+            mdf: mdfRaw || 0,              // 存原始整数（×10）
+            fatigue: fatigueRaw || 0,      // 存原始整数（×10）
+            quality: qualityRaw || 0,
+            created_at: now
+          }
+        });
+      });
       await Promise.all(ops);
       written += batch.length;
     }

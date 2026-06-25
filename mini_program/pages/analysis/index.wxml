@@ -63,7 +63,7 @@
           <text class="summary-label">峰值疲劳度</text>
         </view>
         <view class="summary-card">
-          <text class="summary-value">{{totalRecords}}</text>
+          <text class="summary-value">{{totalMatches}}</text>
           <text class="summary-label">数据条数</text>
         </view>
       </view>

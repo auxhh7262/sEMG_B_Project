@@ -102,17 +102,6 @@ page {
   box-sizing: border-box;
 }
 
-.td {
-  text-align: center;
-  font-family: 'Courier New', monospace;
-  font-size: 24rpx;
-  color: #aaa;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .td-col {
   display: flex;
   flex-direction: column;
@@ -210,8 +199,6 @@ page {
 .dc-icon { font-size: 64px; }
 .dc-title { font-size: 20px; font-weight: 600; color: #fff; }
 .dc-desc { font-size: 14px; color: #888; }
-
-
 
 .empty-placeholder {
   padding: 40rpx 16rpx;

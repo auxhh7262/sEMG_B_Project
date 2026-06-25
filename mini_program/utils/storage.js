@@ -26,6 +26,14 @@ function clearUserProfile() {
   wx.removeStorageSync('current_user');
 }
 
+function getDeviceId() {
+  return wx.getStorageSync('deviceId') || '';
+}
+
+function clearDeviceId() {
+  wx.removeStorageSync('deviceId');
+}
+
 function getAgeGroup(age) {
   if (age < 18) return 0;  // <18
   if (age <= 35) return 1; // 18-35
@@ -39,5 +47,7 @@ module.exports = {
   saveCurrentUser,
   loadUserProfile,
   clearUserProfile,
+  getDeviceId,
+  clearDeviceId,
   getAgeGroup,
 };

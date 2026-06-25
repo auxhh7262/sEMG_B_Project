@@ -121,8 +121,7 @@ bool StorageManager::SaveWifiCredentials(const WifiCredentials_t* creds) {
 }
 
 // ==================== tick() ====================
-// 云方案无需 CZone 定期刷盘，tick() 为空函数供兼容
+// 云方案：数据实时上传，无本地环形存储，tick() 为空函数供兼容
 void StorageManager::tick() {
     // 云方案：无操作
-    // （原 CZone 定期刷盘逻辑已移除）
 }

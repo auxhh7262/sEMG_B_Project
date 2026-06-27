@@ -125,7 +125,8 @@ Page({
         const date = new Date(ts);
         timeStr = `${String(date.getHours()).padStart(2, '0')}:${
           String(date.getMinutes()).padStart(2, '0')}:${
-          String(date.getSeconds()).padStart(2, '0')}`;
+          String(date.getSeconds()).padStart(2, '0')}.${
+          String(date.getMilliseconds()).padStart(3, '0')}`;
       }
 
       const actPct = activation != null ? Math.max(0, Math.min(100, activation / 10)) : null;

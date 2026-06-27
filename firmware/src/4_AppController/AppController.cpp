@@ -65,6 +65,8 @@ void AppController::tick(void)
             _calibRelaxMdf = relaxMdf;
             LOG("[CTRL] <<< CALIB RELAX done: rms=%.3f mdf=%.1f (%u samples) <<<\n",
                 relaxRms, relaxMdf, _calibSampleCount);
+            // 上传静息校准结果到云端
+            _netMgr->uploadCalibPhase("relax", relaxRms, relaxMdf);
         }
     }
     else if (_calibPhase == CALIB_ACTIVE) {
@@ -80,6 +82,8 @@ void AppController::tick(void)
             _signalProc->setActiveReference(activeRms);
             LOG("[CTRL] <<< CALIB ACTIVE done: rms=%.3f activeMdf=%.1f endMdf=%.1f <<<\n",
                 activeRms, _calibActiveMdf, _calibEndMdf);
+            // 上传用力校准结果到云端（含 end_mdf）
+            _netMgr->uploadCalibPhase("active", activeRms, _calibActiveMdf, _calibEndMdf);
         }
     }
 

@@ -2,12 +2,24 @@
 const cloud = require('wx-server-sdk');
 cloud.init({ env: 'cloud1-d4gqmimmo05b12c94' });
 const db = cloud.database();
-const _ = db.command;
 
 exports.main = async (event, context) => {
-  // HTTP 访问服务: body 是 JSON 字符串; SDK 调用: event 是解析后的对象
-  const body = (typeof event.body === 'string') ? JSON.parse(event.body) : event;
-  const { device_id, last_command_id } = body;
+  console.log('[getDeviceCommand] RAW event:', JSON.stringify(event));
+
+  // ========== 兼容 HTTP 网关 + SDK 调用（与 dataIngest 相同模式）==========
+  let body = {};
+  try {
+    if (typeof event.body === 'string' && event.body.trim() !== '') {
+      body = JSON.parse(event.body);
+    } else {
+      body = event;
+    }
+  } catch (e) {
+    console.error('[getDeviceCommand] JSON parse error:', e);
+    return { code: 400, msg: 'invalid JSON body' };
+  }
+
+  const { device_id } = body;
 
   if (!device_id) {
     return { code: 400, msg: 'missing device_id' };
@@ -15,7 +27,8 @@ exports.main = async (event, context) => {
 
   try {
     // 查询该设备的 pending 命令（按创建时间升序，先到先执行）
-    const { data } = await db.collection('device_commands')
+    const coll = db.collection('device_commands');
+    const { data } = await coll
       .where({
         device_id,
         status: 'pending',
@@ -32,7 +45,7 @@ exports.main = async (event, context) => {
     console.log('[getDeviceCommand]', device_id, cmd.command, cmd._id);
 
     // 标记为 executing（防止重复执行）
-    await db.collection('device_commands').doc(cmd._id).update({
+    await coll.doc(cmd._id).update({
       data: { status: 'executing', executing_at: Date.now() }
     });
 

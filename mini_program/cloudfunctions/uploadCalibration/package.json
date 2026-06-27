@@ -1,0 +1,9 @@
+{
+  "name": "uploadCalibration",
+  "version": "1.0.0",
+  "description": "固件上传校准结果到云端 sessions",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "latest"
+  }
+}

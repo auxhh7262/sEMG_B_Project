@@ -61,13 +61,54 @@ Page({
   // ==================== 初始化 ====================
   _initDeviceId() {
     const deviceId = storage.getDeviceId();
-    this._deviceId = deviceId;
-    this.setData({ deviceId });
+    if (deviceId) {
+      this._deviceId = deviceId;
+      this.setData({ deviceId });
+      logger.log('[calibrate] deviceId from storage:', deviceId);
+    } else {
+      // 本地无 deviceId（未通过 BLE 配对），从云端自动发现
+      this.setData({ deviceId: '发现中...' });
+      this._discoverDeviceFromCloud();
+    }
+  },
+
+  async _discoverDeviceFromCloud() {
+    if (!wx.cloud) {
+      this.setData({ deviceId: '未发现', statusText: '云开发未启用' });
+      return;
+    }
+    try {
+      const db = wx.cloud.database({ env: CLOUD_ENV });
+      const res = await db.collection('device_status')
+        .where({ status: 'online' })
+        .limit(1)
+        .get();
+      if (res.data && res.data.length > 0) {
+        const deviceId = res.data[0].device_id;
+        if (deviceId) {
+          this._deviceId = deviceId;
+          this.setData({ deviceId });
+          // 回写到本地存储，下次直接用
+          wx.setStorageSync('deviceId', deviceId);
+          logger.log('[calibrate] deviceId from cloud:', deviceId);
+          return;
+        }
+      }
+      this.setData({ deviceId: '未发现', statusText: '未发现在线设备' });
+      logger.log('[calibrate] no device found in cloud');
+    } catch (e) {
+      logger.error('[calibrate] discover device error:', e);
+      this.setData({ deviceId: '未发现', statusText: '请先在network页面连接设备' });
+    }
   },
 
   _checkCloudStatus() {
     if (wx.cloud) {
       this.setData({ connected: true });
+      // 如果本地无 deviceId 且还没发起过云发现，重试
+      if (!this._deviceId) {
+        this._discoverDeviceFromCloud();
+      }
     } else {
       this.setData({ connected: false, statusText: '云开发未启用' });
     }
@@ -128,11 +169,19 @@ Page({
   },
 
   async _startRelaxPhase() {
+    // 清除旧校准数据，避免 !this.data.relaxRms 守卫阻止新校准的状态跳转
+    wx.removeStorageSync('calib_data');
     this.setData({
       phase: 'relax',
       statusText: '请保持放松...',
       liveRelaxRms: null,
       liveRelaxMdf: null,
+      relaxRms: null,
+      relaxMdf: null,
+      activeRms: null,
+      activeMdf: null,
+      endMdf: null,
+      saved: false,
     });
 
     // 发送 record_relax 命令
@@ -152,7 +201,7 @@ Page({
 
   async _startActivePhase() {
     this.setData({
-      phase: 'active',
+      phase: 'active_contract',
       statusText: '请全力握紧拳头，保持15秒！',
       liveActiveRms: null,
       liveActiveMdf: null,
@@ -168,6 +217,9 @@ Page({
       this._resetAll();
       return;
     }
+
+    // 重启轮询，等待固件上传 active 数据
+    this._startPolling();
   },
 
   onStartActive() {
@@ -263,25 +315,30 @@ Page({
     try {
       const db = wx.cloud.database({ env: CLOUD_ENV });
 
-      // 查询最新的校准结果（从 sessions 集合）
+      // 查该设备最新的校准 session（不限状态，relax阶段 status=calibrating）
       const res = await db.collection('sessions')
-        .where({
-          device_id: this._deviceId,
-          status: 'completed',
-        })
-        .orderBy('ended_at', 'desc')
+        .where({ device_id: this._deviceId })
+        .orderBy('started_at', 'desc')
         .limit(1)
         .get();
 
+      logger.log('[calibrate] poll: found', res.data ? res.data.length : 0, 'sessions');
+
       if (res.data && res.data.length > 0) {
         const session = res.data[0];
+        logger.log('[calibrate] poll session.calibration:', JSON.stringify(session.calibration));
 
-        // 检查是否有新的校准结果
+        // 检查是否有校准数据
         if (session.calibration) {
           const { relax_rms, relax_mdf, active_rms, active_mdf, end_mdf } = session.calibration;
 
-          if (relax_rms && !this.data.relaxRms) {
-            // relax 完成
+          logger.log('[calibrate] poll fields: relax_rms=' + relax_rms,
+            'active_rms=' + active_rms,
+            'this.relaxRms=' + this.data.relaxRms,
+            'this.activeRms=' + this.data.activeRms);
+
+          // relax 完成但 active 未完成 → 提示用户开始用力
+          if (relax_rms !== undefined && relax_rms > 0 && !active_rms && !this.data.relaxRms) {
             this.setData({
               relaxRms: relax_rms,
               relaxMdf: relax_mdf || 0,
@@ -292,8 +349,8 @@ Page({
             return;
           }
 
-          if (active_rms && !this.data.activeRms) {
-            // active 完成
+          // active 也完成了 → 显示结果
+          if (active_rms !== undefined && active_rms > 0 && !this.data.activeRms) {
             this.setData({
               activeRms: active_rms,
               activeMdf: active_mdf || 0,
@@ -307,9 +364,6 @@ Page({
           }
         }
       }
-
-      // 继续轮询直到完成或超时（最多5分钟）
-      // 注：固件端日志会显示校准进度
 
     } catch (e) {
       logger.error('[calibrate] poll status error:', e);
@@ -356,6 +410,16 @@ Page({
     this.setData({ showUserForm: false });
   },
 
+  // 阻止弹窗内事件冒泡到遮罩层
+  onNoop() {},
+
+  // 输入框聚焦时确保可视
+  onInputFocus() {
+    // 弹窗锚定在 flex-start，键盘弹起时 mask 自身 overflow-y:auto 会自动可滚动
+    // 此处仅做兜底：将页面滚动到顶部，防止底层页面滚动干扰
+    wx.pageScrollTo({ scrollTop: 0, duration: 150 });
+  },
+
   onUserFormSubmit(e) {
     const { name, age, gender, handedness } = e.detail.value;
     if (!name || !age) {
@@ -386,5 +450,9 @@ Page({
   onRefresh() {
     this._loadCalibData();
     wx.showToast({ title: '已刷新', icon: 'success', duration: 1000 });
+  },
+
+  onGoToMonitor() {
+    wx.switchTab({ url: '/pages/realtime/index' });
   },
 });

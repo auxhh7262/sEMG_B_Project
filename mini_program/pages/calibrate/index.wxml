@@ -23,10 +23,10 @@ module.exports.val = val;
 
     <!-- 按钮：个人信息 + 开始校准 -->
     <view class="action-buttons">
-      <button class="btn btn-outline" bindtap="onOpenUserForm">
+      <button class="btn btn-outline" bindtap="onShowUserForm">
         {{currentUser ? '修改个人信息' : '录入个人信息'}}
       </button>
-      <button class="btn btn-outline" bindtap="{{currentUser ? 'startCalibration' : 'onFirstUseCalibrate'}}">
+      <button class="btn btn-outline" bindtap="{{currentUser ? 'onStartCalibration' : 'onShowUserForm'}}">
         开始校准
       </button>
     </view>
@@ -188,8 +188,8 @@ module.exports.val = val;
 
 
   <!-- ===================== 用户录入弹窗 ===================== -->
-  <view class="modal-mask" wx:if="{{showUserForm}}" bindtap="onCloseUserForm">
-    <view class="modal-panel" catchtap="onStopPropagation">
+  <view class="modal-mask" wx:if="{{showUserForm}}" bindtap="onHideUserForm">
+    <view class="modal-panel" catchtap="onNoop">
 
       <text class="modal-title">录入用户信息</text>
 
@@ -197,11 +197,11 @@ module.exports.val = val;
         <view class="form-row">
           <view class="form-item form-col">
             <text>姓名</text>
-            <input name="name" value="{{formData.name}}" placeholder="请输入姓名" maxlength="20"/>
+            <input name="name" value="{{formData.name}}" placeholder="请输入姓名" maxlength="20" cursor-spacing="150" adjust-position="{{false}}" bindfocus="onInputFocus"/>
           </view>
           <view class="form-item form-col">
             <text>年龄</text>
-            <input name="age" type="number" value="{{formData.age}}" placeholder="年龄" min="1" max="120"/>
+            <input name="age" type="number" value="{{formData.age}}" placeholder="年龄" min="1" max="120" cursor-spacing="150" adjust-position="{{false}}" bindfocus="onInputFocus"/>
           </view>
         </view>
         <view class="form-row">
@@ -222,7 +222,7 @@ module.exports.val = val;
         </view>
         <view class="form-btns">
           <button plain form-type="submit" class="btn-primary">确认</button>
-          <button plain type="default" bindtap="onCloseUserForm">取消</button>
+          <button plain type="default" bindtap="onHideUserForm">取消</button>
         </view>
       </form>
 

@@ -15,6 +15,7 @@
 #define CLOUD_URL_GET_COMMAND       "http://" CLOUD_BASE_DOMAIN "/getDeviceCommand"
 #define CLOUD_URL_REPORT_STATUS     "http://" CLOUD_BASE_DOMAIN "/reportDeviceStatus"
 #define CLOUD_URL_ACK_COMMAND       "http://" CLOUD_BASE_DOMAIN "/ackDeviceCommand"
+#define CLOUD_URL_UPLOAD_CALIB      "http://" CLOUD_BASE_DOMAIN "/uploadCalibration"
 
 // 上传参数
 #define INGEST_BATCH_FRAMES    10    // 每批上传帧数 (1秒 @ 10Hz)
@@ -32,6 +33,8 @@ public:
                        float fatigue, uint8_t quality);
     void uploadCalibration(float relaxRms, float relaxMdf,
                            float activeRms, float activeMdf);
+    void uploadCalibPhase(const char* phase, float rms, float mdf,
+                          float endMdf = 0.0f);
     void reportStatus() { _reportStatus(); }
 
     bool isWifiConnected() const { return _wifiConnected; }
@@ -49,6 +52,7 @@ private:
     void _wifiTick();
     void _checkIngest();
     bool _httpPost(const char* url, const char* jsonBody);
+    bool _httpPost(const char* url, const char* jsonBody, String* outBody);
     void _genDeviceId(char* buf, size_t len);
 
     bool _wifiConnected;

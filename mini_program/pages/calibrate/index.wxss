@@ -272,8 +272,10 @@ page { height: auto !important; min-height: 100vh; background-color: #0d0d0d !im
   background: rgba(0,0,0,0.85);
   z-index: 1000;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
+  padding-top: 120rpx;
+  overflow-y: auto;
 }
 .modal-mask.show { display: flex; }
 
@@ -281,9 +283,9 @@ page { height: auto !important; min-height: 100vh; background-color: #0d0d0d !im
   background: #1a1a2e;
   border: 1px solid #334;
   border-radius: 20rpx;
-  padding: 40rpx 32rpx;
+  padding: 40rpx 32rpx 60rpx;
   width: 85%;
-  max-height: 80vh;
+  max-height: 60vh;
   overflow-y: auto;
   box-shadow: 0 8rpx 32rpx rgba(0,0,0,0.5);
 }

@@ -1,0 +1,9 @@
+{
+  "name": "getDeviceCommand",
+  "version": "1.0.0",
+  "description": "固件短轮询获取待执行命令",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "latest"
+  }
+}

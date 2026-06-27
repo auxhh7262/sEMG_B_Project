@@ -1,0 +1,9 @@
+{
+  "name": "reportDeviceStatus",
+  "version": "1.0.0",
+  "description": "上报设备在线状态",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "latest"
+  }
+}

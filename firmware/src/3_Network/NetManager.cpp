@@ -55,6 +55,10 @@ bool NetManager::initBlocking(uint32_t wifiTimeoutMs) {
 
     delay(1000);
 
+    // 初始化 sessionId
+    uint32_t now = millis();
+    snprintf(_sessionId, sizeof(_sessionId), "%s_%lu", _deviceId, now);
+
     LOG("[NET] Connecting WiFi (timeout %lums)...\n", wifiTimeoutMs);
     WiFi.begin(ssid, pass);
 
@@ -82,20 +86,15 @@ bool NetManager::initBlocking(uint32_t wifiTimeoutMs) {
     LOG("[NET] WiFi connected! IP: %s, SSID: %s\n",
         WiFi.localIP().toString().c_str(), WiFi.SSID());
 
-    char json[256];
-    snprintf(json, sizeof(json),
-             "{\"device_id\":\"%s\",\"firmware_ver\":\"v2.0.0\"}",
-             _deviceId);
-    LOG("[NET] Registering device...\n");
-    bool registered = _httpPost(CLOUD_URL_DEVICE_REGISTER, json);
-    LOG("[NET] Device register: %s\n", registered ? "OK" : "FAIL");
+    // 等待 2 秒让网络稳定
+    LOG("[NET] Waiting 2s for network to stabilize...\n");
+    delay(2000);
 
-    uint32_t now = millis();
-    snprintf(_sessionId, sizeof(_sessionId), "%s_%lu", _deviceId, now);
-    _sessionActive = true;
-    _lastIngestMs = now;
-
+    // 跳过注册，直接开始会话
     LOG("[NET] Session started: %s\n", _sessionId);
+    _sessionActive = true;
+    _lastIngestMs = millis();
+    LOG("[NET] Skipping registration, session active.\n");
     return true;
 }
 
@@ -203,10 +202,20 @@ void NetManager::_checkIngest() {
     }
 }
 
-// ==================== HTTP POST (Simplified - No HTTPS) ====================
-bool NetManager::_httpPost(const char* url, const char* jsonBody) {
-    WiFiClient client;
+// ==================== HTTP POST V3.2 — Robust HTTP/1.0 with Retry ====================
+// 核心修复:
+//   1. %zu → %lu 避免 Arduino 平台格式符不兼容导致 Content-Length 乱码
+//   2. HTTP/1.0 避免 Transfer-Encoding 问题
+//   3. \r\n\r\n 正确检测 header 结束（之前只检测 \r\n，导致解析错乱）
+//   4. 添加 User-Agent 头避免被网关 WAF 拦截
+//   5. 重试机制（2次尝试）
+//   6. 超时从 15s 缩短到 8s
 
+bool NetManager::_httpPost(const char* url, const char* jsonBody) {
+    return _httpPost(url, jsonBody, nullptr);
+}
+
+bool NetManager::_httpPost(const char* url, const char* jsonBody, String* outBody) {
     // 解析 http://host/path
     const char* hostStart = url + 7;  // skip "http://"
     const char* pathStart = strchr(hostStart, '/');
@@ -223,59 +232,117 @@ bool NetManager::_httpPost(const char* url, const char* jsonBody) {
         pathStart = "/";
     }
 
-    if (!client.connect(host, 80)) {
-        LOG("[NET] TCP connect FAIL to %s\n", host);
-        return false;
-    }
+    unsigned long bodyLen = (unsigned long)strlen(jsonBody);
 
-    size_t bodyLen = strlen(jsonBody);
-
-    char req[768];
-    int reqLen = snprintf(req, sizeof(req),
-        "POST %s HTTP/1.1\r\n"
+    // 预构建 HTTP 请求头
+    char reqHeader[512];
+    int hdrLen = snprintf(reqHeader, sizeof(reqHeader),
+        "POST %s HTTP/1.0\r\n"
         "Host: %s\r\n"
+        "User-Agent: sEMG-FW/3.2\r\n"
         "Content-Type: application/json\r\n"
-        "Content-Length: %zu\r\n"
+        "Content-Length: %lu\r\n"
+        "Accept: application/json\r\n"
         "Connection: close\r\n"
         "\r\n",
         pathStart, host, bodyLen);
 
-    client.write((const uint8_t*)req, reqLen);
-    client.write((const uint8_t*)jsonBody, bodyLen);
-    client.flush();
-
-    // 读取响应
-    unsigned long t0 = millis();
-    String statusLine;
-    String body;
-    bool headerDone = false;
-
-    while (millis() - t0 < 5000) {
-        while (client.available()) {
-            char c = client.read();
-            if (!headerDone) {
-                if (c == '\n' && statusLine.endsWith("\r\n")) {
-                    headerDone = true;
-                    statusLine.trim();
-                    body = "";
-                    continue;
-                }
-                statusLine += c;
-            } else {
-                body += c;
-            }
+    // 重试循环
+    for (int attempt = 0; attempt < 2; attempt++) {
+        if (attempt > 0) {
+            LOG("[NET] HTTP retry %d after 800ms...\n", attempt + 1);
+            delay(800);
         }
+
+        WiFiClient client;
+        client.stop();  // ensure clean state
+        delay(30);
+
+        unsigned long tConn = millis();
+        if (!client.connect(host, 80)) {
+            LOG("[NET] TCP connect FAIL (attempt %d)\n", attempt + 1);
+            client.stop();
+            continue;
+        }
+        LOG("[NET] TCP connected in %lums\n", (unsigned long)(millis() - tConn));
+
+        // 发送请求头
+        size_t written = client.write((const uint8_t*)reqHeader, hdrLen);
+        if (written != (size_t)hdrLen) {
+            LOG("[NET] Header write fail: %lu/%d\n", (unsigned long)written, hdrLen);
+            client.stop();
+            continue;
+        }
+
+        // 短暂延迟让 WiFi 模块处理 header/body 边界
+        delay(20);
+
+        // 发送请求体
+        written = client.write((const uint8_t*)jsonBody, bodyLen);
+        if (written != (size_t)bodyLen) {
+            LOG("[NET] Body write fail: %lu/%lu\n", (unsigned long)written, bodyLen);
+            client.stop();
+            continue;
+        }
+
+        client.flush();
+
+        // 读取响应 — 用 \r\n\r\n 正确检测 header 结束
+        unsigned long t0 = millis();
+        String header, respBody;
+        bool headerDone = false;
+
+        while (millis() - t0 < 8000) {
+            if (!client.connected() && !client.available()) break;
+
+            while (client.available()) {
+                char c = client.read();
+                if (!headerDone) {
+                    header += c;
+                    int hLen = header.length();
+                    // 精确检测 \r\n\r\n (header 结束标记)
+                    if (hLen >= 4 &&
+                        header[hLen-4] == '\r' && header[hLen-3] == '\n' &&
+                        header[hLen-2] == '\r' && header[hLen-1] == '\n') {
+                        headerDone = true;
+                    }
+                } else {
+                    respBody += c;
+                }
+            }
+
+            if (headerDone && !client.available()) break;
+        }
+
+        client.stop();
+
+        if (header.length() == 0) {
+            LOG("[NET] No response (attempt %d)\n", attempt + 1);
+            continue;
+        }
+
+        // 只打印 status line (第一行)
+        int firstNL = header.indexOf('\n');
+        if (firstNL > 0) {
+            String statusLine = header.substring(0, firstNL);
+            statusLine.trim();
+            LOG("[NET] %s\n", statusLine.c_str());
+        }
+
+        if (respBody.length() > 0 && respBody.length() < 300) {
+            LOG("[NET] Body: %s\n", respBody.c_str());
+        }
+
+        if (outBody) *outBody = respBody;
+
+        bool ok = (header.indexOf("200") > 0) || (header.indexOf("201") > 0);
+        if (!ok) {
+            LOG("[NET] HTTP error (attempt %d)\n", attempt + 1);
+        }
+        return ok;
     }
 
-    client.stop();
-
-    LOG("[NET] HTTP Status: %s\n", statusLine.c_str());
-    if (body.length() > 0) {
-        LOG("[NET] HTTP Body: %s\n", body.c_str());
-    }
-
-    bool ok = (statusLine.indexOf("200") > 0) || (statusLine.indexOf("201") > 0);
-    return ok;
+    return false;
 }
 
 void NetManager::uploadCalibration(float relaxRms, float relaxMdf,
@@ -288,6 +355,22 @@ void NetManager::uploadCalibration(float relaxRms, float relaxMdf,
 
     LOG("[NET] Calib saved: relax={%.3f,%.1f} active={%.3f,%.1f}\n",
         relaxRms, relaxMdf, activeRms, activeMdf);
+}
+
+void NetManager::uploadCalibPhase(const char* phase, float rms, float mdf,
+                                   float endMdf) {
+    char json[256];
+    if (endMdf > 0.0f) {
+        snprintf(json, sizeof(json),
+            "{\"device_id\":\"%s\",\"phase\":\"%s\",\"rms\":%.3f,\"mdf\":%.1f,\"end_mdf\":%.1f}",
+            _deviceId, phase, rms, mdf, endMdf);
+    } else {
+        snprintf(json, sizeof(json),
+            "{\"device_id\":\"%s\",\"phase\":\"%s\",\"rms\":%.3f,\"mdf\":%.1f}",
+            _deviceId, phase, rms, mdf);
+    }
+    LOG("[NET] Uploading calib phase %s: rms=%.3f mdf=%.1f\n", phase, rms, mdf);
+    _httpPost(CLOUD_URL_UPLOAD_CALIB, json);
 }
 
 void NetManager::tick() {
@@ -307,87 +390,40 @@ void NetManager::tick() {
 }
 
 void NetManager::_checkCommand() {
-    // POST {"device_id":"..."} to get pending command
     char jsonBody[128];
     snprintf(jsonBody, sizeof(jsonBody),
              "{\"device_id\":\"%s\"}", _deviceId);
 
-    char host[128];
-    const char* url = CLOUD_URL_GET_COMMAND;
-    const char* hostStart = strstr(url, "://") + 3;
-    const char* pathStart = strchr(hostStart, '/');
-    int hostLen = pathStart ? (pathStart - hostStart) : (int)strlen(hostStart);
-    if (hostLen > 127) hostLen = 127;
-    memcpy(host, hostStart, hostLen);
-    host[hostLen] = '\0';
-    const char* path = pathStart ? pathStart : "/";
+    String respBody;
+    bool ok = _httpPost(CLOUD_URL_GET_COMMAND, jsonBody, &respBody);
 
-    WiFiClient client;
-    if (!client.connect(host, 80)) {
-        LOG("[NET] TCP connect FAIL for command check\n");
-        return;
-    }
+    if (!ok || respBody.length() == 0) return;
 
-    char req[384];
-    int reqLen = snprintf(req, sizeof(req),
-        "POST %s HTTP/1.1\r\n"
-        "Host: %s\r\n"
-        "Content-Type: application/json\r\n"
-        "Content-Length: %d\r\n"
-        "Connection: close\r\n"
-        "\r\n",
-        path, host, (int)strlen(jsonBody));
-    client.write((const uint8_t*)req, reqLen);
-    client.write((const uint8_t*)jsonBody, strlen(jsonBody));
-    client.flush();
-
-    unsigned long t0 = millis();
-    String body;
-    bool headerDone = false;
-    while (millis() - t0 < 5000) {
-        if (client.available()) {
-            char c = client.read();
-            if (!headerDone) {
-                if (c == '\n' && body.endsWith("\r\n\r\n")) {
-                    headerDone = true;
-                    body = "";
-                    continue;
-                }
-                body += c;
-            } else {
-                body += c;
-            }
-        }
-    }
-    client.stop();
-
-    if (body.length() == 0) return;
-
-    // Parse response: {"code":0,"command":{"id":"...","command":"..."}}
+    // 解析响应: {"code":0,"command":{"id":"...","command":"..."}}
     char cmdId[64] = {0};
     char cmdName[64] = {0};
 
-    int idIdx = body.indexOf("\"id\"");
+    int idIdx = respBody.indexOf("\"id\"");
     if (idIdx > 0) {
-        int colonIdx = body.indexOf(':', idIdx);
+        int colonIdx = respBody.indexOf(':', idIdx);
         if (colonIdx > 0) {
-            int q1 = body.indexOf('"', colonIdx);
-            int q2 = body.indexOf('"', q1 + 1);
+            int q1 = respBody.indexOf('"', colonIdx);
+            int q2 = respBody.indexOf('"', q1 + 1);
             if (q1 > 0 && q2 > q1) {
-                String tmp = body.substring(q1 + 1, q2);
+                String tmp = respBody.substring(q1 + 1, q2);
                 strncpy(cmdId, tmp.c_str(), sizeof(cmdId) - 1);
             }
         }
     }
 
-    int cmdIdx = body.indexOf("\"command\"");
+    // 用 "\"command\":\"" 精确匹配内层字符串字段
+    // 避免误匹配到外层 "command":{"id":...,"command":"xxx"} 的对象 key
+    int cmdIdx = respBody.indexOf("\"command\":\"");
     if (cmdIdx < 0) return;
-    int colonIdx = body.indexOf(':', cmdIdx);
-    if (colonIdx < 0) return;
-    int q1 = body.indexOf('"', colonIdx);
-    int q2 = body.indexOf('"', q1 + 1);
-    if (q1 < 0 || q2 < 0) return;
-    String tmp = body.substring(q1 + 1, q2);
+    int valStart = cmdIdx + 11; // strlen("\"command\":\"") = 11
+    int q2 = respBody.indexOf('"', valStart);
+    if (q2 < 0) return;
+    String tmp = respBody.substring(valStart, q2);
     strncpy(cmdName, tmp.c_str(), sizeof(cmdName) - 1);
 
     LOG("[NET] Received command: %s (id=%s)\n", cmdName, cmdId);

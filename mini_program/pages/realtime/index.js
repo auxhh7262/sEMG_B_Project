@@ -156,10 +156,11 @@ Page({
         });
       }
 
-      log('[realtime] ts=' + ts + ' rms=' + (rms / 1000 || 0).toFixed(3) + 
+      log('[realtime] ' + timeStr + ' rms=' + (rms / 1000 || 0).toFixed(3) + 
         ' act=' + (actPct != null ? actPct.toFixed(1) + '%' : '--') +
         ' mdf=' + (mdf / 10 || 0).toFixed(1) +
-        ' fatigue=' + (fatPct != null ? fatPct.toFixed(1) + '%' : '--'));
+        ' fatigue=' + (fatPct != null ? fatPct.toFixed(1) + '%' : '--') +
+        ' q=' + (quality != null ? quality + '%' : '--'));
     } catch (e) {
       error('[realtime] _onDataPoint crash:', e);
     }

@@ -5,16 +5,19 @@ cloud.init({ env: 'cloud1-d4gqmimmo05b12c94' });
 const db = cloud.database();
 
 exports.main = async (event, context) => {
-  // HTTP 触发器的请求体会放在 event.body 里（字符串）
-  // 需要手动解析 JSON
-  let body = {};
-  try {
-    body = JSON.parse(event.body || '{}');
-  } catch (e) {
-    return { code: 400, msg: 'invalid json body' };
-  }
+  // [V3.2] 兼容两种调用方式:
+  //   - HTTP 触发: device_id 在 event.body 的 JSON 字符串中
+  //   - wx.cloud.callFunction(): device_id 直接在 event 中
+  let device_id = event.device_id;
 
-  const { device_id } = body;
+  if (!device_id && event.body) {
+    try {
+      const body = JSON.parse(event.body);
+      device_id = body.device_id;
+    } catch (e) {
+      // body 不是有效 JSON，忽略
+    }
+  }
 
   if (!device_id) {
     return { code: 400, msg: 'missing device_id' };
@@ -24,7 +27,6 @@ exports.main = async (event, context) => {
     // 从 device_status 集合查询最新状态
     const res = await db.collection('device_status')
       .where({ device_id })
-      .orderBy('timestamp', 'desc')
       .limit(1)
       .get();
 

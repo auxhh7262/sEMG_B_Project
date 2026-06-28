@@ -40,8 +40,16 @@ public:
     bool isWifiConnected() const { return _wifiConnected; }
     const char* getDeviceId() const { return _deviceId; }
 
+    // [V3.2] BLE 配网后同步更新重连凭据
+    void updateSavedCredentials(const char* ssid, const char* pass);
+
+    // [V3.3] BLE 配网期间暂停 WiFi 重连（防止射频冲突导致 BLE 断开）
+    void pauseWifiRetry()   { _provisioningActive = true; }
+    void resumeWifiRetry()  { _provisioningActive = false; }
+
     void onResetWifi(void (*cb)()) { _onResetWifi = cb; }
     void onWifiLostTimeout(void (*cb)()) { _onWifiLostTimeout = cb; }
+    void onWifiReconnected(void (*cb)()) { _onWifiReconnected = cb; }
 
     // 校准命令回调
     void onRecordRelax(void (*cb)()) { _onRecordRelax = cb; }
@@ -75,6 +83,10 @@ private:
     char _lastCommandId[64];  // track pending command for ack
     bool _sessionActive;
 
+    // 保存 WiFi 凭证副本（用于重连）
+    char _savedSsid[33];
+    char _savedPass[65];
+
     float _relaxRms, _relaxMdf, _activeRms, _activeMdf;
     bool _calibReady;
 
@@ -89,10 +101,13 @@ private:
 
     void (*_onResetWifi)();
     void (*_onWifiLostTimeout)();
+    void (*_onWifiReconnected)();
+    bool _bleOpened;
+    bool _provisioningActive;   // [V3.3] BLE 配网中，暂停 WiFi 重连
     void (*_onRecordRelax)();
     void (*_onRecordActive)();
     void (*_onSaveCalib)();
     uint32_t _wifiDisconnectedSince;
 };
 
-#endif
+#endif // NET_MANAGER_H

@@ -21,6 +21,8 @@ NetManager::NetManager()
     , _onRecordActive(nullptr)
     , _onSaveCalib(nullptr)
     , _wifiDisconnectedSince(0)
+    , _bleOpened(false)
+    , _provisioningActive(false)
 {
     memset(_deviceId, 0, sizeof(_deviceId));
     memset(_sessionId, 0, sizeof(_sessionId));
@@ -53,6 +55,10 @@ bool NetManager::initBlocking(uint32_t wifiTimeoutMs) {
         LOG("[NET] Using hardcoded WiFi: %s\n", ssid);
     }
 
+    // 保存凭证副本（用于重连）
+    strncpy(_savedSsid, ssid, sizeof(_savedSsid)-1);
+    strncpy(_savedPass, pass, sizeof(_savedPass)-1);
+
     delay(1000);
 
     // 初始化 sessionId
@@ -76,10 +82,25 @@ bool NetManager::initBlocking(uint32_t wifiTimeoutMs) {
 
     {
         uint32_t dhcpStart = millis();
-        while (millis() - dhcpStart < 5000) {
+        while (millis() - dhcpStart < 10000) {
             IPAddress ip = WiFi.localIP();
             if (ip[0] != 0 && ip[0] != 255) break;
             delay(500);
+        }
+        IPAddress ip = WiFi.localIP();
+        if (ip[0] == 0 || ip[0] == 255) {
+            LOG("[NET] DHCP timeout, IP still 0.0.0.0, retrying WiFi.begin...\n");
+            WiFi.disconnect();
+            delay(500);
+            WiFi.begin(_savedSsid, _savedPass);
+            uint32_t retryStart = millis();
+            while (millis() - retryStart < 15000) {
+                if (WiFi.status() == WL_CONNECTED) {
+                    IPAddress rip = WiFi.localIP();
+                    if (rip[0] != 0 && rip[0] != 255) break;
+                }
+                delay(500);
+            }
         }
     }
 
@@ -99,28 +120,59 @@ bool NetManager::initBlocking(uint32_t wifiTimeoutMs) {
 }
 
 void NetManager::_wifiTick() {
+    // 1. WiFi 已连接
     if (WiFi.status() == WL_CONNECTED) {
         if (!_wifiConnected) {
+            // 等待 DHCP 分配 IP
+            uint32_t dhcpStart = millis();
+            IPAddress ip;
+            while (millis() - dhcpStart < 8000) {
+                ip = WiFi.localIP();
+                if (ip[0] != 0 && ip[0] != 255) break;
+                delay(500);
+            }
             _wifiConnected = true;
             _wifiDisconnectedSince = 0;
-            LOG("[NET] WiFi reconnected (auto)\n");
+            LOG("[NET] WiFi reconnected (auto) IP: %s\n", ip.toString().c_str());
+            // 重连成功，关闭 BLE 广播
+            if (_onWifiReconnected) {
+                _onWifiReconnected();
+            }
         }
         return;
     }
 
-    if (_wifiConnected) {
-        _wifiConnected = false;
-        _wifiDisconnectedSince = millis();
-        LOG("[NET] WiFi disconnected\n");
+    // [V3.3] BLE 配网中 → 暂停所有 WiFi 操作（防止射频冲突断开 BLE）
+    if (_provisioningActive) {
         return;
     }
 
-    if (_wifiDisconnectedSince > 0 && _onWifiLostTimeout) {
+    // 2. WiFi 已断开
+    if (_wifiConnected) {
+        _wifiConnected = false;
+        _wifiDisconnectedSince = millis();
+        _bleOpened = false;   // 重置 BLE 打开标志，下次断开时可以再打开
+        LOG("[NET] WiFi disconnected, will retry...\n");
+        // 立即尝试重连（使用保存的凭证）
+        WiFi.begin(_savedSsid, _savedPass);
+        return;
+    }
+
+    // 3. WiFi 一直断开，尝试重连
+    if (_wifiDisconnectedSince > 0) {
         uint32_t elapsed = millis() - _wifiDisconnectedSince;
-        if (elapsed > 300000) {
-            LOG("[NET] WiFi lost > 5min, triggering provisioning mode\n");
-            _wifiDisconnectedSince = 0;
-            _onWifiLostTimeout();
+
+        // 每 5 秒重试一次
+        if (elapsed % 5000 < 100) {   // 简单粗暴的 5 秒间隔
+            LOG("[NET] WiFi retry connecting...\n");
+            WiFi.begin(_savedSsid, _savedPass);   // 用保存的凭证重连
+        }
+
+        // 超过 1 分钟还连不上 → 打开 BLE（只调用一次）
+        if (elapsed > 60000 && !_bleOpened && _onWifiLostTimeout) {
+            LOG("[NET] WiFi lost > 1min, opening BLE for re-provisioning...\n");
+            _onWifiLostTimeout();   // 打开 BLE 广播（不清除 EEPROM）
+            _bleOpened = true;     // 防止重复调用
         }
     }
 }
@@ -371,6 +423,15 @@ void NetManager::uploadCalibPhase(const char* phase, float rms, float mdf,
     }
     LOG("[NET] Uploading calib phase %s: rms=%.3f mdf=%.1f\n", phase, rms, mdf);
     _httpPost(CLOUD_URL_UPLOAD_CALIB, json);
+}
+
+// [V3.2] BLE 配网后同步更新重连凭据（修复 WiFi 断连后使用过期凭据的 bug）
+void NetManager::updateSavedCredentials(const char* ssid, const char* pass) {
+    strncpy(_savedSsid, ssid, sizeof(_savedSsid) - 1);
+    _savedSsid[sizeof(_savedSsid) - 1] = '\0';
+    strncpy(_savedPass, pass, sizeof(_savedPass) - 1);
+    _savedPass[sizeof(_savedPass) - 1] = '\0';
+    LOG("[NET] Reconnect credentials updated: %s\n", _savedSsid);
 }
 
 void NetManager::tick() {

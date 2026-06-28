@@ -22,7 +22,7 @@ exports.main = async (event, context) => {
       ip: ip || '',
       ssid: ssid || '',
       status,
-      last_report: now,
+      timestamp: now,
       ...extra,
     };
 

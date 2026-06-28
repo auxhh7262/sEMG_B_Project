@@ -82,8 +82,8 @@
     </view>
     <view class="btn-row">
       <button class="btn-secondary" bindtap="refreshStatus">刷新状态</button>
-      <button class="btn-danger" bindtap="resetConfig">重置 WiFi</button>
     </view>
+    <button class="btn-primary" style="margin-top:24rpx" bindtap="reProvision">重新配网</button>
   </view>
 
   <!-- 配网说明 -->

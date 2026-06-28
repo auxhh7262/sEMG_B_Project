@@ -1,512 +1,552 @@
-// pages/network/index.js — V3.0 Simplified Provisioning
-// 对标小米/涂鸦 BLE 配网标准:
-//   - BLE 连接后先读 deviceId (19B10005), 再写凭证
-//   - 订阅 result 通知 (19B10006), 不再通过 IP 特征获取状态
-//   - 配网成功后断开 BLE, 从云端 getDeviceStatus 获取 IP
-//   - 设备 ID 以固件真实 deviceId 为准
-//   - 删除 IP notify 特征 (19B10003) 相关逻辑
+// pages/network/index.js — V3.2 Simplified Provisioning
+// BLE 配网流程: 扫描 → 连接 → 读 deviceId → 写 SSID/PASS → 等通知 OK → 云端取 IP
+// V3.2 变更: 云函数改用 wx.cloud.callFunction() 而非 HTTP tx.request()
 
 const { log, warn, error } = require('../../utils/logger');
-const CLOUD_URL = 'https://cloud1-d4gqmimmo05b12c94.service.tcloudbase.com';
 
-// BLE UUID 常量 (与固件 V3.0 一致)
-const BLE_SERVICE_ID = '19B10000-E8F2-537E-4F6C-D104768A1214';
+// BLE UUIDs (from firmware BleConfigServer.h)
+const SERVICE_UUID   = '19B10000-E8F2-537E-4F6C-D104768A1214';
 const CHAR_SSID      = '19B10001-E8F2-537E-4F6C-D104768A1214';
 const CHAR_PASS      = '19B10004-E8F2-537E-4F6C-D104768A1214';
-const CHAR_DEVICE_ID = '19B10005-E8F2-537E-4F6C-D104768A1214';  // V3.0 NEW
-const CHAR_RESULT    = '19B10006-E8F2-537E-4F6C-D104768A1214';  // V3.0 NEW (replaces IP notify)
+const CHAR_DEVICE_ID = '19B10005-E8F2-537E-4F6C-D104768A1214';
+const CHAR_RESULT    = '19B10006-E8F2-537E-4F6C-D104768A1214';
+
+const CLOUD_ENV = 'cloud1-d4gqmimmo05b12c94';
+const PROVISION_TIMEOUT = 35000;  // 35s: 比固件 30s 多 5s 缓冲
+const STATUS_REFRESH_INTERVAL = 10000;  // 10s: 已连接设备状态自动刷新间隔
+const MAX_DEVICE_STATUS_RETRIES = 6;  // 最多重试 6 次 (含首次, ~18s)
 
 Page({
   data: {
-    connected: false,
-    configured: false,
+    status: 'idle',          // idle/scanning/connected/configuring/configured/failed
+    statusMsg: '',
     deviceId: '',
     ip: '',
     ssid: '',
-    status: 'idle',       // idle | scanning | connecting | configuring | connected | failed
-    statusMsg: '未连接',
     bleDeviceName: '',
-    wifiSsids: [],        // 附近 WiFi 列表 (微信 API)
-    wifiConnected: '',    // 当前手机连接 WiFi 的 SSID
-    wifiPass: '',
+    connected: false,
+    configured: false,
     showPassInput: false,
-    // 配网进度
-    provisionStep: '',    // '' | 'connecting_ble' | 'writing_ssid' | 'writing_pass' | 'waiting_wifi' | 'done' | 'failed'
+    wifiConnected: '',       // SSID input (named wifiConnected for backward compat)
+    wifiPass: '',
+    provisionStep: '',       // '' / 'connecting_ble' / 'writing_ssid' / 'writing_pass' / 'waiting_wifi' / 'done'
+    stepsActive: 0           // 0/1/2/3
   },
 
-  onLoad() {
-    log('[network] Cloud onLoad');
-    // 测试1: 直接发送到 /log 端点
-    wx.request({
-      url: 'http://192.168.137.1:9876/log',
-      method: 'POST',
-      header: { 'content-type': 'application/json' },
-      data: { logs: [{ level: 'log', msg: '[NETWORK] TEST1 - direct /log POST', time: new Date().toLocaleTimeString('zh-CN', { hour12: false }) }] },
-      success(res) { console.log('[NETWORK] TEST1 OK status=' + res.statusCode); },
-      fail(err) { console.log('[NETWORK] TEST1 FAIL ' + err.errMsg); }
-    });
-    
-    // 测试2: 发送到 /health 端点（确认网络通）
-    wx.request({
-      url: 'http://192.168.137.1:9876/health',
-      method: 'GET',
-      success(res) { console.log('[NETWORK] TEST2 health OK', res.data); },
-      fail(err) { console.log('[NETWORK] TEST2 health FAIL', err.errMsg); }
-    });
-    console.log('[network] ========== 页面加载 ==========');
-    console.log('[network] 测试日志 - 如果你能在GUI窗口看到这条消息，说明日志系统工作正常');
-    
-    this._deviceId = '';
-    this._bleDeviceId = '';
-    this._retryTimer = null;
-    this._provisionTimeout = null;
+  // BLE device reference
+  _device: null,
+  _serviceProfile: null,
+  _deviceStatusRetries: 0,
 
-    const savedSSID = wx.getStorageSync('lastWiFiSSID');
-    if (savedSSID) {
-      this.setData({ wifiConnected: savedSSID });
-    }
+  onLoad() {
+    log('[Network] page loaded');
+    this._initBle();
   },
 
   onUnload() {
-    log('[network] onUnload');
-    this._cleanup();
+    this._cleanupBle();
   },
 
-  // ==================== BLE 扫描 ====================
-  startScan() {
-    if (this._retryTimer) clearTimeout(this._retryTimer);
-
-    this.setData({ status: 'scanning', statusMsg: '正在扫描设备...', provisionStep: '' });
-    wx.closeBluetoothAdapter({
-      success: () => {
-        setTimeout(() => this._doScan(), 500);
-      },
-      fail: () => {
-        this._doScan();
-      }
-    });
-  },
-
-  _doScan() {
-    const that = this;
+  // ========== BLE 初始化 ==========
+  _initBle() {
     wx.openBluetoothAdapter({
-      success() {
-        wx.startBluetoothDevicesDiscovery({
-          services: [BLE_SERVICE_ID],
-          allowDuplicatesKey: false,
-          success() {
-            that.setData({ statusMsg: '正在搜索 sEMG 设备...' });
-            wx.onBluetoothDeviceFound(function(res) {
-              res.devices.forEach(device => {
-                const name = device.name || device.localName || '';
-                if (name.toLowerCase().indexOf('semg') >= 0) {
-                  wx.stopBluetoothDevicesDiscovery();
-                  that._bleDeviceId = device.deviceId;
-                  that.setData({ bleDeviceName: name, statusMsg: '发现设备: ' + name });
-                  that._connectBle(device.deviceId);
-                }
-              });
-            });
-
-            // 10 秒超时
-            that._retryTimer = setTimeout(() => {
-              wx.stopBluetoothDevicesDiscovery();
-              wx.offBluetoothDeviceFound();
-              if (!that.data.connected) {
-                that.setData({ status: 'idle', statusMsg: '未发现设备，请确保设备已通电并在配网模式' });
-              }
-            }, 10000);
-          },
-          fail(err) {
-            that.setData({ status: 'failed', statusMsg: '蓝牙扫描失败: ' + err.errMsg });
-          }
-        });
+      success: () => {
+        log('[BLE] Adapter opened');
+        this._onBleStateChange();
       },
-      fail(err) {
-        that.setData({ status: 'failed', statusMsg: '蓝牙初始化失败: ' + err.errMsg });
+      fail: (err) => {
+        error('[BLE] open adapter fail:', err);
+        if (err.errCode === 10001) {
+          wx.showModal({
+            title: '蓝牙未开启',
+            content: '请先打开手机蓝牙',
+            showCancel: false
+          });
+        }
+      }
+    });
+    wx.onBluetoothAdapterStateChange(this._onBleStateChange.bind(this));
+    wx.onBLEConnectionStateChange(this._onConnectionChange.bind(this));
+  },
+
+  _onBleStateChange() {
+    wx.getBluetoothAdapterState({
+      success: (res) => {
+        if (!res.available) {
+          this.setData({ status: 'idle', statusMsg: '蓝牙不可用' });
+        }
       }
     });
   },
 
-  // ==================== BLE 连接 ====================
-  _connectBle(deviceId) {
-    const that = this;
-    this.setData({ status: 'connecting', statusMsg: '正在连接设备...', provisionStep: 'connecting_ble' });
+  _cleanupBle() {
+    try { wx.closeBluetoothAdapter(); } catch(e) {}
+  },
+
+  // ========== 扫描 ==========
+  startScan() {
+    this.setData({ status: 'scanning', statusMsg: '搜索设备中...', deviceId: '', connected: false });
+
+    // [V3.2] 防御：确保适配器已打开再扫描（适配器可能因用户关闭蓝牙等原因处于关闭态）
+    wx.openBluetoothAdapter({
+      success: () => {
+        log('[BLE] adapter ready, starting discovery');
+        this._doStartScan();
+      },
+      fail: (err) => {
+        error('[BLE] adapter open fail:', err);
+        this.setData({ status: 'idle', statusMsg: '蓝牙未开启' });
+      }
+    });
+  },
+
+  _doStartScan() {
+    // [V3.2] 不传 services 过滤，避免部分手机因 UUID 格式差异滤掉设备
+    wx.startBluetoothDevicesDiscovery({
+      allowDuplicatesKey: false,
+      success: () => log('[BLE] scan started (no UUID filter)'),
+      fail: (err) => {
+        error('[BLE] scan fail:', err);
+        this.setData({ status: 'idle', statusMsg: '搜索失败，请重试' });
+      }
+    });
+
+    wx.onBluetoothDeviceFound((res) => {
+      for (const dev of (res.devices || [])) {
+        const name = dev.name || dev.localName || '';
+        if (!name.startsWith('sEMG')) continue;
+        log('[BLE] found sEMG device:', name, dev.deviceId);
+        this._connectDevice(dev);
+        return;
+      }
+    });
+
+    // 扫描超时 15s
+    if (this._scanTimer) clearTimeout(this._scanTimer);
+    this._scanTimer = setTimeout(() => {
+      wx.stopBluetoothDevicesDiscovery();
+      if (!this.data.connected) {
+        this.setData({ status: 'idle', statusMsg: '未找到设备，请确保设备处于配网模式' });
+      }
+    }, 15000);
+  },
+
+  // ========== 连接 ==========
+  _connectDevice(device) {
+    if (this._scanTimer) clearTimeout(this._scanTimer);
+
+    wx.stopBluetoothDevicesDiscovery();
+    this._device = device;
+    this.setData({
+      bleDeviceName: device.name || device.localName || 'sEMG Device',
+      statusMsg: '连接中...'
+    });
 
     wx.createBLEConnection({
-      deviceId,
-      success() {
-        that.setData({ connected: true, statusMsg: '已连接，正在读取设备信息...' });
-        that._readDeviceId(deviceId);
+      deviceId: device.deviceId,
+      success: () => {
+        log('[BLE] connected to', device.name);
+        // 等待 500ms 让 BLE 稳定后再获取服务
+        setTimeout(() => this._getServices(device.deviceId), 500);
       },
-      fail(err) {
-        that.setData({ status: 'failed', statusMsg: '连接失败: ' + err.errMsg });
+      fail: (err) => {
+        error('[BLE] connect fail:', err);
+        this.setData({ status: 'idle', statusMsg: '连接失败，请重试' });
       }
     });
   },
 
-  // ==================== V3.0: 读取设备真实 deviceId ====================
-  _readDeviceId(deviceId) {
-    const that = this;
+  _getServices(deviceId) {
+    wx.getBLEDeviceServices({
+      deviceId,
+      success: (res) => {
+        const svc = res.services.find(s => s.uuid.toUpperCase() === SERVICE_UUID);
+        if (!svc) {
+          this.setData({ status: 'idle', statusMsg: '服务未找到' });
+          return;
+        }
+        this._serviceProfile = { deviceId, serviceId: svc.uuid };
+        this._getCharacteristics(deviceId, svc.uuid);
+      },
+      fail: (err) => {
+        error('[BLE] get services fail:', err);
+        this.setData({ status: 'idle', statusMsg: '获取服务失败' });
+      }
+    });
+  },
+
+  _getCharacteristics(deviceId, serviceId) {
     wx.getBLEDeviceCharacteristics({
-      deviceId,
-      serviceId: BLE_SERVICE_ID,
-      success(res) {
-        const charList = (res.characteristics || []).map(c => c.uuid.toUpperCase());
-        console.log('[NET] Characteristics:', charList);
+      deviceId, serviceId,
+      success: (res) => {
+        log('[BLE] characteristics found:', res.characteristics.length);
 
-        // 读取 deviceId 特征 (19B10005)
-        wx.readBLECharacteristicValue({
-          deviceId,
-          serviceId: BLE_SERVICE_ID,
-          characteristicId: CHAR_DEVICE_ID,
-          success() {
-            console.log('[NET] deviceId read requested');
-          },
-          fail() {
-            console.log('[NET] deviceId read failed, using BLE ID fallback');
-            // 降级: 用 BLE deviceId 后 6 位
-            that._deviceId = 'sEMG_' + deviceId.slice(-6).toUpperCase();
-            that.setData({ deviceId: that._deviceId });
-            that._subscribeResult(deviceId);
-          }
-        });
-
-        // 等待 read 回调
-        wx.onBLECharacteristicValueChange(function(changeRes) {
-          const uuid = (changeRes.characteristicId || '').toUpperCase();
-
-          // 处理 deviceId 读取结果
-          if (uuid === CHAR_DEVICE_ID) {
-            const value = that._bufToString(changeRes.value);
-            if (value && value.length > 0) {
-              that._deviceId = value;
-              console.log('[NET] Device ID:', that._deviceId);
-              that.setData({ deviceId: that._deviceId });
-              that._saveDeviceIdToStorage(that._deviceId);
-            }
-            that._subscribeResult(deviceId);
-          }
-
-          // 处理配网结果通知
-          if (uuid === CHAR_RESULT) {
-            const result = that._bufToString(changeRes.value);
-            console.log('[NET] Provision result:', result);
-            that._handleProvisionResult(result, deviceId);
-          }
-        });
-      },
-      fail(err) {
-        console.error('[NET] getCharacteristics failed:', err);
-        that.setData({ statusMsg: '获取特征失败: ' + err.errMsg });
-      }
-    });
-  },
-
-  // ==================== V3.0: 订阅配网结果通知 ====================
-  _subscribeResult(deviceId) {
-    const that = this;
-    wx.notifyBLECharacteristicValueChange({
-      deviceId,
-      serviceId: BLE_SERVICE_ID,
-      characteristicId: CHAR_RESULT,
-      state: true,
-      success() {
-        console.log('[NET] Result notify subscribed');
-        that.setData({ statusMsg: '设备信息已读取，请输入 WiFi 密码' });
-      },
-      fail(err) {
-        console.log('[NET] Result subscribe failed:', err);
-        that.setData({ statusMsg: '设备信息已读取，请输入 WiFi 密码' });
-      }
-    });
-  },
-
-  // ==================== V3.0: 处理配网结果 ====================
-  _handleProvisionResult(rawValue, deviceId) {
-    let result = rawValue;
-    let ip = '';
-
-    // 尝试解析 JSON: {"result":"OK","ip":"192.168.1.5"}
-    try {
-      const json = JSON.parse(rawValue);
-      result = json.result || rawValue;
-      ip = json.ip || '';
-    } catch (e) {
-      // 纯文本: "CONNECTING" / "OK" / "FAIL"
-    }
-
-    console.log('[NET] Provision:', result, ip);
-
-    if (result === 'CONNECTING') {
-      this.setData({ statusMsg: '设备正在连接 WiFi...', provisionStep: 'waiting_wifi' });
-      this._startProvisionTimeout(deviceId);
-    }
-    else if (result === 'OK') {
-      this._clearProvisionTimeout();
-      if (ip) {
-        this.setData({ ip, configured: true, status: 'connected', statusMsg: '配网成功!', provisionStep: 'done' });
-      } else {
-        this.setData({ statusMsg: '配网成功，正在获取设备信息...', provisionStep: 'done' });
-        // 从云端获取 IP
-        setTimeout(() => this._getStatusFromCloud(), 2000);
-      }
-      // 断开 BLE
-      this._disconnectBle(deviceId);
-    }
-    else if (result === 'FAIL') {
-      this._clearProvisionTimeout();
-      this.setData({ status: 'failed', statusMsg: 'WiFi 连接失败，请检查密码后重试', provisionStep: 'failed' });
-    }
-  },
-
-  _startProvisionTimeout(deviceId) {
-    this._clearProvisionTimeout();
-    this._provisionTimeout = setTimeout(() => {
-      if (this.data.provisionStep === 'waiting_wifi') {
-        this.setData({ status: 'failed', statusMsg: '配网超时 (30s)，请重试', provisionStep: 'failed' });
-        this._disconnectBle(deviceId);
-      }
-    }, 35000);
-  },
-
-  _clearProvisionTimeout() {
-    if (this._provisionTimeout) {
-      clearTimeout(this._provisionTimeout);
-      this._provisionTimeout = null;
-    }
-  },
-
-  // ==================== 写 WiFi 凭证 ====================
-  startConfig() {
-    if (!this.data.connected) {
-      wx.showToast({ title: '请先连接设备', icon: 'none' });
-      return;
-    }
-    this.setData({ showPassInput: true });
-  },
-
-  confirmConfig() {
-    const { wifiConnected, wifiPass, _bleDeviceId } = this.data;
-    const deviceId = this._bleDeviceId;
-
-    if (!wifiConnected) {
-      wx.showToast({ title: '请先输入 WiFi SSID', icon: 'none' });
-      return;
-    }
-    if (!wifiPass || wifiPass.length < 8) {
-      wx.showToast({ title: '密码至少 8 位', icon: 'none' });
-      return;
-    }
-
-    this.setData({ status: 'configuring', statusMsg: '正在发送配置...', provisionStep: 'writing_ssid' });
-
-    wx.setStorageSync('lastWiFiSSID', wifiConnected);
-
-    // Step 1: write SSID
-    const that = this;
-    this._writeBleChar(deviceId, CHAR_SSID, wifiConnected)
-      .then(() => {
-        that.setData({ provisionStep: 'writing_pass' });
-        // Step 2: write Password (password write triggers firmware to start connection)
-        return that._writeBleChar(deviceId, CHAR_PASS, wifiPass);
-      })
-      .then(() => {
-        that.setData({ statusMsg: '配置已发送，等待设备连接...', provisionStep: 'waiting_wifi' });
-        that._startProvisionTimeout(deviceId);
-      })
-      .catch((err) => {
-        that.setData({ status: 'failed', statusMsg: '发送失败: ' + (err.errMsg || err), provisionStep: 'failed' });
-        that._disconnectBle(deviceId);
-      });
-  },
-
-  _writeBleChar(deviceId, charId, value) {
-    return new Promise((resolve, reject) => {
-      // 将字符串转为 ArrayBuffer
-      const buffer = this._strToBuf(value);
-
-      wx.writeBLECharacteristicValue({
-        deviceId,
-        serviceId: BLE_SERVICE_ID,
-        characteristicId: charId,
-        value: buffer,
-        success() {
-          console.log('[NET] Write OK:', charId.slice(-2));
-          setTimeout(resolve, 300);  // 等待硬件处理
-        },
-        fail(err) {
-          console.error('[NET] Write FAIL:', charId.slice(-2), err);
-          reject(err);
-        }
-      });
-    });
-  },
-
-  // ==================== 断开 BLE ====================
-  _disconnectBle(deviceId) {
-    if (!deviceId) return;
-    wx.closeBLEConnection({
-      deviceId,
-      success() {
-        console.log('[NET] BLE disconnected');
-      }
-    });
-  },
-
-  // ==================== 云端状态读取 ====================
-  _getStatusFromCloud() {
-    if (!this._deviceId) {
-      this.setData({ statusMsg: '无法获取设备信息 (deviceId 未知)' });
-      return;
-    }
-
-    const that = this;
-    wx.request({
-      url: CLOUD_URL + '/getDeviceStatus',
-      method: 'POST',
-      header: { 'Content-Type': 'application/json' },
-      data: { device_id: that._deviceId },
-      success(res) {
-        const body = res.data;
-        if (body && body.code === 0 && body.data) {
-          const { ip, ssid, updated_at } = body.data;
-          that.setData({
-            configured: true,
-            status: 'connected',
-            statusMsg: '已连接',
-            ip: ip || '',
-            ssid: ssid || '',
-            provisionStep: 'done'
+        // 启用 notify on result char (CHAR_RESULT)
+        const resultChar = res.characteristics.find(
+          c => c.uuid.toUpperCase() === CHAR_RESULT
+        );
+        if (resultChar && resultChar.properties.notify) {
+          wx.notifyBLECharacteristicValueChange({
+            deviceId, serviceId, characteristicId: resultChar.uuid,
+            state: true,
+            success: () => log('[BLE] notify enabled on result char'),
+            fail: (err) => warn('[BLE] notify enable fail:', err)
           });
-          if (ssid) wx.setStorageSync('lastWiFiSSID', ssid);
-        } else {
-          that.setData({ statusMsg: '设备信息获取失败，请重试' });
+          wx.onBLECharacteristicValueChange(this._onNotify.bind(this));
         }
-      },
-      fail() {
-        that.setData({ statusMsg: '网络请求失败，请检查网络后重试' });
-      }
-    });
-  },
 
-  refreshStatus() {
-    if (this._deviceId) {
-      this._getStatusFromCloud();
-    } else {
-      wx.showToast({ title: '请先配网获取设备 ID', icon: 'none' });
-    }
-  },
-
-  // ==================== 重置 WiFi ====================
-  resetConfig() {
-    const that = this;
-    wx.showModal({
-      title: '确认重置',
-      content: '将清除设备 WiFi 配网信息，设备将回到配网模式',
-      success(res) {
-        if (res.confirm) {
-          that._doReset();
+        // 读取 deviceId (CHAR_DEVICE_ID)
+        const devIdChar = res.characteristics.find(
+          c => c.uuid.toUpperCase() === CHAR_DEVICE_ID
+        );
+        if (devIdChar && devIdChar.properties.read) {
+          wx.readBLECharacteristicValue({
+            deviceId, serviceId, characteristicId: devIdChar.uuid,
+            success: () => log('[BLE] reading deviceId...'),
+            fail: (err) => warn('[BLE] read deviceId fail:', err)
+          });
+          // Wait for onBLECharacteristicValueChange with deviceId
         }
-      }
-    });
-  },
 
-  _doReset() {
-    const deviceId = this._bleDeviceId;
-    if (deviceId) {
-      // 方式 1: 已连接 BLE → 直接写 RESET_WIFI (固件 V2 兼容)
-      this._writeBleChar(deviceId, CHAR_SSID, 'RESET_WIFI')
-        .then(() => {
-          wx.showToast({ title: '重置指令已发送', icon: 'success' });
-          this.setData({ configured: false, ip: '', ssid: '', status: 'idle', statusMsg: '已重置，请重新配网' });
-          wx.removeStorageSync('deviceId');
-          wx.removeStorageSync('lastWiFiSSID');
-        })
-        .catch(() => {
-          wx.showToast({ title: '重置失败，请重试', icon: 'none' });
+        this.setData({
+          connected: true,
+          status: 'connected',
+          statusMsg: '已连接'
         });
-    } else if (this._deviceId) {
-      // 方式 2: 通过云端命令重置
-      wx.request({
-        url: CLOUD_URL + '/sendDeviceCommand',
-        method: 'POST',
-        header: { 'Content-Type': 'application/json' },
-        data: {
-          device_id: this._deviceId,
-          command: 'reset_wifi',
-          params: '{}'
-        },
-        success() {
-          wx.showToast({ title: '重置命令已发送', icon: 'success' });
-          this.setData({ configured: false, ip: '', ssid: '', status: 'idle', statusMsg: '等待设备响应...' });
-        },
-        fail() {
-          wx.showToast({ title: '命令发送失败', icon: 'none' });
-        }
-      });
-    } else {
-      wx.showToast({ title: '未发现设备', icon: 'none' });
+      },
+      fail: (err) => {
+        error('[BLE] get characteristics fail:', err);
+        this.setData({ status: 'idle', statusMsg: '获取特征值失败' });
+      }
+    });
+  },
+
+  _onNotify(res) {
+    const text = this._ab2str(res.value);
+    log('[BLE] notify:', text);
+
+    // 如果是 deviceId char 的值（先收到）
+    if (res.characteristicId.toUpperCase() === CHAR_DEVICE_ID) {
+      this.setData({ deviceId: text });
+      return;
+    }
+
+    // 如果是 result char 的通知
+    if (res.characteristicId.toUpperCase() === CHAR_RESULT) {
+      if (text === 'OK') {
+        log('[BLE] Provision OK!');
+        this.setData({
+          provisionStep: 'done',
+          stepsActive: 3,
+          statusMsg: '配网成功!'
+        });
+        // 延迟断开 BLE，然后从云端获取设备状态
+        this._disconnectBle();
+        // [V3.2] 固件 reportStatus 需要 HTTP 往返时间，延迟 3s 再查
+        this._deviceStatusRetries = 0;
+        if (this._deviceStatusTimer) clearTimeout(this._deviceStatusTimer);
+        this._deviceStatusTimer = setTimeout(() => this._fetchDeviceStatus(), 3000);
+      } else if (text === 'CONNECTING') {
+        this.setData({
+          provisionStep: 'waiting_wifi',
+          stepsActive: 2,
+          statusMsg: '设备连接WiFi中...'
+        });
+      } else if (text === 'FAIL') {
+        this.setData({
+          status: 'failed',
+          statusMsg: '配网失败',
+          provisionStep: '',
+          showPassInput: true
+        });
+      }
     }
   },
 
-  // ==================== 工具函数 ====================
-  _cleanup() {
-    this._clearProvisionTimeout();
-    if (this._retryTimer) clearTimeout(this._retryTimer);
-    wx.offBluetoothDeviceFound();
-    wx.stopBluetoothDevicesDiscovery();
-    wx.closeBluetoothAdapter({});
-  },
-
-  _strToBuf(str) {
-    const buffer = new ArrayBuffer(str.length);
-    const view = new Uint8Array(buffer);
-    for (let i = 0; i < str.length; i++) {
-      view[i] = str.charCodeAt(i);
-    }
-    return buffer;
-  },
-
-  _bufToString(buffer) {
-    if (!buffer) return '';
-    const view = new Uint8Array(buffer);
-    let str = '';
-    for (let i = 0; i < view.length; i++) {
-      str += String.fromCharCode(view[i]);
-    }
-    return str;
-  },
-
-  _saveDeviceIdToStorage(deviceId) {
-    if (deviceId && deviceId.length > 0) {
-      wx.setStorageSync('deviceId', deviceId);
-      console.log('[NET] Device ID saved:', deviceId);
+  _onConnectionChange(res) {
+    if (!res.connected) {
+      log('[BLE] disconnected:', res.deviceId);
+      if (this.data.provisionStep !== 'done' && this._provisionTimer) {
+        // Unexpected disconnect during provisioning
+        this.setData({ status: 'idle', statusMsg: '连接断开' });
+      }
     }
   },
 
-  // ==================== WiFi 列表 (微信 API) ====================
-  onWifiSsidsChange(e) {
-    const ssid = e.detail.value;
-    this.setData({ wifiConnected: ssid });
+  _disconnectBle() {
+    if (this._device) {
+      try { wx.closeBLEConnection({ deviceId: this._device.deviceId }); } catch(e) {}
+      this._device = null;
+    }
   },
 
-  // ==================== 密码输入 ====================
-  onPassInput(e) {
-    this.setData({ wifiPass: e.detail.value });
+  // ========== WiFi 配置 ==========
+  startConfig() {
+    this.setData({ showPassInput: true });
   },
 
   cancelConfig() {
     this.setData({ showPassInput: false, wifiPass: '' });
   },
 
-  // ==================== 重新扫描 ====================
-  rescan() {
-    this._cleanup();
+  onWifiSsidsChange(e) {
+    this.setData({ wifiConnected: e.detail.value });
+  },
+
+  onPassInput(e) {
+    this.setData({ wifiPass: e.detail.value });
+  },
+
+  async confirmConfig() {
+    const { wifiConnected, wifiPass, deviceId } = this.data;
+    if (!wifiConnected || !wifiPass) {
+      wx.showToast({ title: '请输入SSID和密码', icon: 'none' });
+      return;
+    }
+
     this.setData({
-      connected: false, configured: false, deviceId: '', ip: '', ssid: '',
-      status: 'idle', statusMsg: '未连接', provisionStep: ''
+      status: 'configuring',
+      statusMsg: '正在配网...',
+      provisionStep: 'connecting_ble',
+      stepsActive: 0
     });
-    this.startScan();
+
+    const { deviceId: bleId, serviceId } = this._serviceProfile;
+
+    try {
+      // Step 1: 写 SSID
+      await this._writeChar(bleId, serviceId, CHAR_SSID, wifiConnected);
+      log('[BLE] SSID written');
+      this.setData({ provisionStep: 'writing_ssid', stepsActive: 1 });
+
+      // [V3.3] 等待 100ms 固件处理 SSID
+      await this._delay(100);
+
+      // Step 2: 写 PASS
+      await this._writeChar(bleId, serviceId, CHAR_PASS, wifiPass);
+      log('[BLE] PASS written');
+      this.setData({ provisionStep: 'writing_pass', stepsActive: 1, wifiPass: '' });
+
+      // Step 3: 等待固件返回 "CONNECTING" → "OK"（通过 _onNotify）
+      this._startProvisionTimeout();
+
+    } catch (err) {
+      error('[BLE] write fail:', err);
+      if (err.errMsg && err.errMsg.indexOf('no connection') > -1) {
+        // [V3.3] BLE 连接丢失，重连并重试一次
+        wx.showToast({ title: '连接中断，重连中...', icon: 'none' });
+        this.setData({ provisionStep: 'connecting_ble', stepsActive: 0 });
+        this._reconnectAndRetry();
+      } else {
+        this.setData({ status: 'failed', statusMsg: '发送失败: ' + (err.errMsg || '') });
+      }
+    }
+  },
+
+  // [V3.3] BLE 重连重试
+  _reconnectAndRetry() {
+    if (!this._device) return;
+    wx.createBLEConnection({
+      deviceId: this._device.deviceId,
+      success: () => {
+        log('[BLE] reconnected for retry');
+        setTimeout(() => this.confirmConfig(), 1000);
+      },
+      fail: () => {
+        this.setData({ status: 'idle', statusMsg: '重连失败，请重新扫描' });
+      }
+    });
+  },
+
+  _writeChar(deviceId, serviceId, charUuid, value) {
+    return new Promise((resolve, reject) => {
+      const buffer = this._str2ab(value);
+      wx.writeBLECharacteristicValue({
+        deviceId, serviceId, characteristicId: charUuid, value: buffer,
+        success: resolve,
+        fail: reject
+      });
+    });
+  },
+
+  _startProvisionTimeout() {
+    if (this._provisionTimer) clearTimeout(this._provisionTimer);
+    this._provisionTimer = setTimeout(() => {
+      if (this.data.provisionStep !== 'done') {
+        log('[BLE] provision timeout');
+        this.setData({ status: 'failed', statusMsg: '设备已离线，请检查网络或重新配网' });
+        this._disconnectBle();
+      }
+    }, PROVISION_TIMEOUT);
+  },
+
+  // ========== 云端获取设备状态 ==========
+  async _fetchDeviceStatus() {
+    const { deviceId } = this.data;
+    if (!deviceId) {
+      this.setData({ status: 'configured', statusMsg: '无设备ID', ip: '—' });
+      return;
+    }
+
+    this._deviceStatusRetries++;
+    log('[Cloud] fetchDeviceStatus #', this._deviceStatusRetries, ':', deviceId);
+
+    try {
+      const res = await wx.cloud.callFunction({
+        name: 'getDeviceStatus',
+        data: { device_id: deviceId }
+      });
+
+      log('[Cloud] getDeviceStatus result:', res);
+
+      if (res.result && res.result.code === 0 && res.result.data) {
+        const d = res.result.data;
+        this._deviceStatusRetries = 0;
+        if (this._deviceStatusTimer) { clearTimeout(this._deviceStatusTimer); this._deviceStatusTimer = null; }
+        const online = d.online !== false;
+        this.setData({
+          status: 'configured',
+          statusMsg: online ? '设备已连接网络' : '设备已离线，请检查网络或重新配网',
+          configured: true,
+          ip: online ? (d.ip || '—') : '—',
+          ssid: d.ssid || this.data.wifiConnected,
+          provisionStep: ''
+        });
+        if (online) this._startAutoRefresh();
+      } else if (this._deviceStatusRetries >= MAX_DEVICE_STATUS_RETRIES) {
+        // 达到最大重试次数，停止等待
+        log('[Cloud] max retries reached, stopping');
+        this._deviceStatusRetries = 0;
+        if (this._deviceStatusTimer) { clearTimeout(this._deviceStatusTimer); this._deviceStatusTimer = null; }
+        this.setData({
+          status: 'configured',
+          statusMsg: '配网完成，等待同步',
+          configured: true,
+          ip: '—',
+          ssid: this.data.wifiConnected,
+          provisionStep: ''
+        });
+      } else {
+        // 设备可能尚未上报状态，稍后重试
+        log('[Cloud] device not found, retry #', this._deviceStatusRetries, '/', MAX_DEVICE_STATUS_RETRIES);
+        this.setData({ status: 'configuring', statusMsg: '等待设备上线...' });
+        if (this._deviceStatusTimer) clearTimeout(this._deviceStatusTimer);
+        this._deviceStatusTimer = setTimeout(() => this._fetchDeviceStatus(), 3000);
+      }
+    } catch (err) {
+      error('[Cloud] fetch status fail:', err);
+      // catch 不计数，直接停止（不走 retry 循环）
+      this._deviceStatusRetries = 0;
+      if (this._deviceStatusTimer) { clearTimeout(this._deviceStatusTimer); this._deviceStatusTimer = null; }
+      this.setData({
+        status: 'configured',
+        statusMsg: '配网完成，云端查询失败',
+        configured: true,
+        ip: '—',
+        ssid: this.data.wifiConnected,
+        provisionStep: ''
+      });
+    }
+  },
+
+  refreshStatus() {
+    this.setData({ statusMsg: '刷新中...' });
+    this._fetchDeviceStatus();
+  },
+
+  // ========== 自动刷新设备状态（已连接时 10s 轮询） ==========
+  _startAutoRefresh() {
+    this._stopAutoRefresh();
+    log('[UI] start auto-refresh, interval', STATUS_REFRESH_INTERVAL, 'ms');
+    this._autoRefreshTimer = setInterval(() => {
+      this._autoRefreshStatus();
+    }, STATUS_REFRESH_INTERVAL);
+  },
+
+  _stopAutoRefresh() {
+    if (this._autoRefreshTimer) {
+      clearInterval(this._autoRefreshTimer);
+      this._autoRefreshTimer = null;
+      log('[UI] auto-refresh stopped');
+    }
+  },
+
+  async _autoRefreshStatus() {
+    const { deviceId } = this.data;
+    if (!deviceId) return;
+
+    try {
+      const res = await wx.cloud.callFunction({
+        name: 'getDeviceStatus',
+        data: { device_id: deviceId }
+      });
+
+      if (res.result && res.result.code === 0 && res.result.data) {
+        const d = res.result.data;
+        const online = d.online !== false;
+        this.setData({
+          status: 'configured',
+          statusMsg: online ? '设备已连接网络' : '设备已离线，请检查网络或重新配网',
+          ip: online ? (d.ip || '—') : '—',
+          ssid: d.ssid || this.data.wifiConnected
+        });
+      }
+      // 查不到数据 → 设备可能离线，静默等待下次轮询
+    } catch (_) {
+      // 网络/云函数异常，静默等待下次轮询
+    }
+  },
+
+  // 重新配网：关闭 BLE 适配器 + 重置所有状态，回到初始扫描页
+  reProvision() {
+    log('[UI] reProvision - resetting all state');
+
+    // [V3.2] 清除所有遗留定时器，防止旧回调污染新状态
+    if (this._scanTimer) { clearTimeout(this._scanTimer); this._scanTimer = null; }
+    if (this._provisionTimer) { clearTimeout(this._provisionTimer); this._provisionTimer = null; }
+    if (this._deviceStatusTimer) { clearTimeout(this._deviceStatusTimer); this._deviceStatusTimer = null; }
+    this._stopAutoRefresh();
+
+    this._disconnectBle();
+    this._device = null;
+    this._deviceStatusRetries = 0;
+
+    // [V3.2] 停止扫描（不关适配器——关适配器会导致 startScan 时无适配器可用）
+    try { wx.stopBluetoothDevicesDiscovery(); } catch(e) {}
+
+    this.setData({
+      status: 'idle',
+      statusMsg: '',
+      connected: false,
+      configured: false,
+      deviceId: '',
+      deviceName: '',
+      bleDeviceName: '',
+      provisionStep: '',
+      stepsActive: 0,
+      showPassInput: false,
+      wifiConnected: '',
+      wifiPass: '',
+      ip: '',
+      ssid: ''
+    });
+  },
+
+  // ========== 工具方法 ==========
+  _str2ab(str) {
+    const buf = new ArrayBuffer(str.length);
+    const view = new Uint8Array(buf);
+    for (let i = 0; i < str.length; i++) {
+      view[i] = str.charCodeAt(i);
+    }
+    return buf;
+  },
+
+  _ab2str(buf) {
+    return String.fromCharCode.apply(null, new Uint8Array(buf));
+  },
+
+  _delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 });

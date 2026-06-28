@@ -52,13 +52,25 @@ volatile uint32_t g_adcCallbackCount = 0;
 static void _onCloudResetWifi() {
     LOG("[MAIN] Cloud reset_wifi callback\n");
     gBleConfig.resetNetwork();
+    gNetManager.pauseWifiRetry();   // [V3.3] BLE 配网期间暂停 WiFi 重连
 }
 
-// [V3.0] 回调: WiFi 断连 > 5 分钟 → 进入 BLE 配网模式
+// [V3.0] 回调: WiFi 断连 > 1分钟 → 只打开 BLE 广播（不清除 EEPROM）
 static void _onWifiLostTimeout() {
-    LOG("[MAIN] WiFi lost > 5min, entering provisioning mode\n");
-    gBleConfig.resetNetwork();
-    // resetNetwork() 内部已清除凭证 + 断开WiFi + 重启广播
+    LOG("[MAIN] WiFi lost > 1min, opening BLE for re-provisioning\n");
+    // [V3.4] ① 先暂停 WiFi 重连，释放射频
+    gNetManager.pauseWifiRetry();
+    // ② 断开 WiFi 确保射频完全释放给 BLE
+    WiFi.disconnect();
+    delay(50);
+    // ③ 再打开 BLE 广播
+    gBleConfig.startProvisioning();
+}
+
+static void _onWifiReconnected() {
+    LOG("[MAIN] WiFi reconnected, stopping BLE\n");
+    gBleConfig.stopProvisioning();   // 重连成功，关闭 BLE 广播
+    gNetManager.resumeWifiRetry();   // [V3.3] WiFi 恢复，允许后续断连重试
 }
 
 // [V3.0] 校准命令回调
@@ -93,6 +105,9 @@ static void _handleBleCredentials() {
         EEPROM.put(0,  creds.ssid);
         EEPROM.put(64, creds.pass);
 
+        // [V3.2] 同步更新 NetManager 重连凭据（修复 WiFi 断连后使用过期凭据）
+        gNetManager.updateSavedCredentials(creds.ssid, creds.pass);
+
         // 连接 WiFi
         WiFi.disconnect();
         delay(100);
@@ -115,16 +130,15 @@ static void _handleBleCredentials() {
             WiFi.localIP().toString().c_str(), WiFi.SSID());
         // 注: UNO R4 WiFi 库不支持 setAutoReconnect(), 由 NetManager 内部管理重连
 
-        // 通知小程序 "OK" + IP 信息
-        char result[64];
-        snprintf(result, sizeof(result), "{\"result\":\"OK\",\"ip\":\"%s\"}",
-                 WiFi.localIP().toString().c_str());
-        gBleConfig.notifyProvisionResult(result);
+        // [V3.2] 通知小程序配网成功（纯文本 <= 20B，适配默认 MTU=23）
+        // IP 信息由小程序从云端 getDeviceStatus 获取，避免 BLE 通知被 MTU 截断
+        gBleConfig.notifyProvisionResult("OK");
 
         // 延迟 500ms 等小程序收到通知后断开 BLE
         delay(500);
         gBleConfig.stopProvisioning();
         _besConnecting = false;
+        gNetManager.resumeWifiRetry();  // [V3.3] 配网完成，恢复 WiFi 断连重试
         LOG("[MAIN] BLE provisioning complete, BLE stopped\n");
 
         // 立即上报状态到云端
@@ -135,7 +149,7 @@ static void _handleBleCredentials() {
     // 超时 (30s)
     if (millis() - _besConnectStart > 30000) {
         LOG("[MAIN] WiFi connect TIMEOUT\n");
-        gBleConfig.notifyProvisionResult("{\"result\":\"FAIL\"}");
+        gBleConfig.notifyProvisionResult("FAIL");
         _besConnecting = false;
         gBleConfig.startProvisioning();
     }
@@ -182,6 +196,7 @@ void setup() {
     // [V3.0] 注册回调
     gNetManager.onResetWifi(_onCloudResetWifi);
     gNetManager.onWifiLostTimeout(_onWifiLostTimeout);
+    gNetManager.onWifiReconnected(_onWifiReconnected);
     gNetManager.onRecordRelax(_onCloudRecordRelax);
     gNetManager.onRecordActive(_onCloudRecordActive);
     gNetManager.onSaveCalib(_onCloudSaveCalib);
@@ -194,6 +209,7 @@ void setup() {
         // WiFi 未配置或连接失败 → 进入 BLE 配网模式
         LOG("[MAIN] No WiFi config, entering BLE provisioning...\n");
         gBleConfig.startProvisioning();
+        gNetManager.pauseWifiRetry();   // [V3.3] BLE 配网期间暂停 WiFi 重连
     }
 
     // 5. 1kHz ADC 定时器

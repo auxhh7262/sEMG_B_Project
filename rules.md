@@ -1,7 +1,7 @@
 # sEMG 项目文件组织规则
 
-> 版本：v1.0 | 生效：2026-06-28
-> 本文件是 AI 编码工具（Claude Code / Cline / Trae 等）自动读取的配置，也是人工查阅的完整规则。
+> 版本：v1.0 | 生效：2026-06-29
+> 本文件是项目规则的**唯一权威源**。
 > 所有 AI Agent 在创建或移动文件时，必须遵循以下规则。
 
 ---
@@ -15,6 +15,19 @@ E:\
 ├── skills\            ← 功能脚本（复用 Skill）
 └── logs\              ← 运行日志（自动生成）
 ```
+
+---
+
+## 共享资源
+
+以下资源对所有 AI Agent（QClaw / TRAE / WorkBuddy）共享，任何 Agent 都可以读取、修改和调用：
+
+| 资源 | 路径 | 说明 |
+|------|------|------|
+| **规则文件** | `rules.md` | 单一权威源，三个 Agent 都可修改并同步 |
+| **Skill 脚本** | `E:\skills\` | 共享工具，三个 Agent 都可调用和修改 |
+| **日志目录** | `E:\logs\` | 共享日志，三个 Agent 都可写入 |
+| **文档目录** | `E:\docs\` | 共享文档，三个 Agent 都可读写 |
 
 ---
 
@@ -78,15 +91,28 @@ E:\docs\
 
 ---
 
-## 规则三：技能脚本 `E:\skills\`
+## 规则三：共享技能脚本 `E:\skills\`
+
+**`E:\skills\` 是三个 AI Agent（QClaw / TRAE / WorkBuddy）的共享工具目录，任何 Agent 都可以读取、修改和调用。**
 
 ### 目录结构
 
 ```
+E:\skills\
 firmware-upload/
 ├── firmware_upload.pyw      ← 主脚本（无控制台窗口）
 └── SKILL.md                 ← 触发词 + 功能说明
+workflow/
+├── workflow.pyw
+└── SKILL.md
 ```
+
+### 共享规则
+
+- **所有 AI Agent 共享**：`E:\skills\` 下的 skill 脚本对 QClaw、TRAE、WorkBuddy 都可访问
+- **修改同步**：修改 skill 脚本后，其他 AI Agent 立即可用最新版本
+- **不依赖项目路径**：skill 脚本通过 CLI 参数传入项目路径，不硬编码
+- **调用方式**：三个 AI Agent 都使用相同命令调用 skill
 
 ### 规范
 
@@ -95,7 +121,6 @@ firmware-upload/
 - 必须有 `kill_previous()` 防止旧进程堆积
 - SKILL.md 内容必须与实际代码功能一致
 - `E:\skills\` 不是 git 仓库，不需要 `.gitignore`
-- 不依赖项目路径（通过 CLI 参数传入）
 
 ---
 
@@ -162,7 +187,7 @@ pythonw E:\skills\<skill>\<script>.pyw [项目路径参数] [--cli]
 | 上传固件 | `pythonw E:\skills\firmware-upload\firmware_upload.pyw --cli E:\sEMG_B_Project\firmware` | 编译+上传+串口监控GUI |
 | 编译小程序 | `pythonw E:\skills\miniprogram-upload\miniprogram_upload.pyw --cli E:\sEMG_B_Project\mini_program` | 编译+预览码+日志服务GUI |
 | Git推送 | `pythonw E:\skills\git-push\git_push.pyw --cli E:\sEMG_B_Project` | 自动 add→commit→push |
-| 分析日志 | `pythonw E:\skills\log-analyze\log_analyze.pyw --cli <firmware/miniprogram>` | 分析最新日志 |
+| 分析日志 | `pythonw E:\skills\log-analyze\log_analyze.pyw --cli <firmware/mini_program>` | 分析最新日志 |
 | 部署云函数 | `pythonw E:\skills\cloudfunction-deploy\cloudfunction_deploy.pyw --cli E:\sEMG_B_Project\mini_program\cloudfunctions` | 一键部署云函数 |
 
 ### Skill 调用原则
@@ -174,23 +199,52 @@ pythonw E:\skills\<skill>\<script>.pyw [项目路径参数] [--cli]
 
 ---
 
-## 不同 AI Agent 配置方式
+## Skill 运行后的自动分析
 
-### Cline / Claude Code（推荐）
-- 自动读取项目根目录的 `.clinerules`
-- 打开项目目录 `E:\sEMG_B_Project` 后，无需额外配置
+当 firmware-upload 或 miniprogram-upload 运行完成后，AI Agent 应主动询问用户：
 
-### Trae
-- Trae 可能不自动读 `.clinerules`
-- 在 Trae 中打开项目后，手动输入 `请先阅读 .clinerules`
-- 或创建 `E:\sEMG_B_Project\.trae\rules.md` 把本文件内容复制进去
+> "是否需要分析日志？"
 
-### Cursor
-- 创建 `E:\sEMG_B_Project\.cursorrules`，内容同 `.clinerules`
+用户说"分析"时，AI Agent 应：
 
-### 其他工具
-- 第一步问它："你的配置规则文件是什么？"
-- 然后把 `.clinerules` 的内容放到对应文件中
+1. 读取对应的日志目录：
+   - 固件日志：`E:\logs\serial\`
+   - 小程序日志：`E:\logs\mini\`
+2. 读取最新生成的日志文件
+3. 输出完整的分析报告（包含所有发现的异常）
+4. 告知用户发现了哪些问题，供进一步讨论
+
+**注意**：不需要单独调用 log-analyze skill，AI 直接读取日志文件分析。
+
+---
+
+## 规则同步机制
+
+### 权威源
+
+`E:\sEMG_B_Project\rules.md` 是项目规则的**唯一权威源**。
+
+### 同步规则
+
+修改 `rules.md` 后，必须立即同步到各 AI Agent 的配置文件：
+
+```powershell
+$src = "E:\sEMG_B_Project\rules.md"
+# 同步到 QClaw
+Copy-Item $src "C:\Users\honghuang\.qclaw\workspace\AGENTS.md" -Force
+# 同步到 TRAE
+Copy-Item $src "E:\sEMG_B_Project\.trae\rules.md" -Force
+# 同步到 WorkBuddy
+Copy-Item $src "E:\sEMG_B_Project\.workbuddy\rules.md" -Force
+```
+
+### 各工具配置文件
+
+| 工具 | 配置文件 |
+|------|----------|
+| QClaw | `C:\Users\honghuang\.qclaw\workspace\AGENTS.md` |
+| TRAE | `E:\sEMG_B_Project\.trae\rules.md` |
+| WorkBuddy | `E:\sEMG_B_Project\.workbuddy\rules.md` |
 
 ---
 
@@ -232,7 +286,7 @@ git checkout -- <文件>   # 从 git 恢复原始 UTF-8 版本
 ### 常见陷阱
 
 | 场景 | 问题 | 正确做法 |
-|------|------|---------|
+|------|------|----------|
 | PowerShell `-replace` 替换中文 | GBK 终端截断多字节 UTF-8 | 用 `edit` 工具 |
 | `Select-String` 搜索中文 | 管道输出丢失 UTF-8 字节 | 用 `[IO.File]::ReadAllLines()` + UTF8 |
 | `git show` 通过管道查看 | PowerShell 解码 stdout 成 GBK | `git checkout` 写磁盘后用 `read` 看 |

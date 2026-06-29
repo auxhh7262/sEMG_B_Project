@@ -161,8 +161,8 @@ E:\logs\
 
 - ❌ 不要在 `sEMG_B_Project\` 根目录创建任何 `.md` / `.py` / `.js` 文件
 - ❌ 不要改动 `E:\skills\` 中的 Python 脚本（skill 脚本，已稳定）
-- ❌ 不要随意读取或写入 `E:\logs\`（由 skill 驱动）
-- ❌ 不要读取 `E:\skills\` 的 CHANGELOG.md（那是人工维护的日志）
+- ❌ 不要随意写入 `E:\logs\`（由 skill 驱动）
+
 - ❌ 不要在文档或注释中使用 emoji（PowerShell 终端显示为乱码，且一些 AI Agent 转译会破坏 UTF-8 编码）
 - ❌ 批量文件操作优先使用 edit 工具，避免用 PowerShell 做字符串替换（管道会损坏 UTF-8 中文）
 

@@ -12,7 +12,7 @@ void StateManager::init()
 
 bool StateManager::_validTransition(SystemState_t from, SystemState_t to)
 {
-    // [FIX] 允许自转换（RUNNING→RUNNING），避免 reset_calib 等操作误入 ERROR
+    // 允许自转换（RUNNING→RUNNING），避免 reset_calib 等操作误入 ERROR
     if (from == to) return true;
     // 3-state machine: BOOT→RUNNING, ERROR→RUNNING, RUNNING→ERROR
     if (from == ST_BOOT) return (to == ST_RUNNING);
@@ -67,7 +67,7 @@ void StateManager::startCalibPhase(uint16_t durationSec)
 bool StateManager::isCalibPhaseComplete() const
 {
     if (!_phaseActive) {
-        // [DEBUG] 只在前10次打印（避免刷屏）
+        // 只在前10次打印（避免刷屏）
         static uint8_t _dbgCount = 0;
         if (_dbgCount++ < 10) {
             LOG("[STATE] isCalibPhaseComplete: NOT active (state=%s)\n", getStateName());

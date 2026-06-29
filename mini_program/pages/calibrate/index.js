@@ -1,5 +1,4 @@
-// pages/calibrate/index.js — Cloud Version V3.0
-// 校准通过云端中转：命令 → 云端 → 固件（轮询获取）
+// pages/calibrate/index.js — 校准页面
 const logger = require('../../utils/logger.js');
 const storage = require('../../utils/storage.js');
 const CLOUD_ENV = 'cloud1-d4gqmimmo05b12c94';

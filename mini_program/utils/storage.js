@@ -1,5 +1,5 @@
 // utils/storage.js - 用户profile本地存储工具（单用户版）
-// [v3.9.25] localStorage 为快照缓存（快速UI展示），固件A区Flash为权威数据源
+// localStorage 为快照缓存（快速UI展示），固件A区Flash为权威数据源
 // 校准数据存储在 wx.storage: 'user_profile', 'current_user', 'calib_data'
 
 function getCurrentUser() {

@@ -1,5 +1,4 @@
-﻿// #define MDF_DBG_ENABLED  // 取消注释以启用MDF调试日志（会产生大量串口输出）
-#include "0_Base/Board.h"
+﻿#include "0_Base/Board.h"
 #include "0_Base/Logger.h"
 #include "SignalProcessor.h"
 
@@ -7,9 +6,7 @@
 #include <cmath>
 #include <cstring>
 
-// ==================== 调试日志宏（已修复快捷键缺失问题）====================
-#define SIGNAL_PROCESSOR_VERSION "V1.0.0"
-#define SIGNAL_PROCESSOR_DATE "2026-05-12"
+// ==================== 调试日志宏 ====================
 
 // ==================== 初始化与重置 ====================
 #ifndef RING_BUFFER_SIZE
@@ -42,7 +39,7 @@ SignalProcessor::SignalProcessor() :
     m_fatigue(0.0f), m_activation(0.0f),
     m_relaxRMS_mV(0.0f), m_activeRMS_mV(0.0f),  // 0=未校准,避免默认计算出100%activation
     m_relaxMDF_hz(100.0f),
-    m_contractionStartMDF(0.0f),  // [v3.9.11]
+    m_contractionStartMDF(0.0f),
     m_isCalibrated(false),
     m_isContracting(false),
     m_currentMDF(50.0f), m_lastValidMDF(50.0f), m_isMdfValid(false),
@@ -63,7 +60,7 @@ SignalProcessor::SignalProcessor() :
     m_baselineMDF_hz(0.0f),
     m_wasActive20(false),
     m_currentRMS(0.0f),
-    // [v3.9.24] 校准MDF缓冲区初始化
+    // 校准MDF缓冲区初始化
     m_calibMdfIndex(0),
     m_calibMdfCount(0),
     m_calibMdfPeak(0.0f),
@@ -97,11 +94,11 @@ void SignalProcessor::init() {
     
     m_mvPerAdcUnit = ADC_REF_MV / (float)ADC_MAX_VALUE;
     initializeFFTTwiddles();
-    SP_LOG_NORMAL("SignalProcessor initialized. Version: %s (%s)\n", SIGNAL_PROCESSOR_VERSION, SIGNAL_PROCESSOR_DATE);
+    SP_LOG_NORMAL("SignalProcessor initialized.\n");
 }
 
 
-// v2: drain all available new samples from ring buffer
+// drain all available new samples from ring buffer
 uint16_t SignalProcessor::drainNewSamples(int16_t* outBuf, uint16_t maxCount) {
     noInterrupts();
     uint16_t avail = m_availableSamples;
@@ -170,7 +167,7 @@ void SignalProcessor::updateSampleRateStats() {
 }
 
 // ==================== 快照缓存 ====================
-// [FIX-v3.9.10] 不再原地排序！排序会破坏时序，导致RMS计算错误
+// 不再原地排序！排序会破坏时序，导致RMS计算错误
 // DC偏移用简单均值（512样本已足够稳定，无需裁剪均值）
 void SignalProcessor::takeSnapshotIfNeeded(uint16_t window_size) {
     if (m_snapshotValid && m_snapshotSize == window_size) return;
@@ -190,7 +187,7 @@ void SignalProcessor::takeSnapshotIfNeeded(uint16_t window_size) {
     m_snapshotSize = window_size;
     m_snapshotValid = true;
 
-    // [DEBUG-v3.9.10b] 原始ADC诊断：打印min/max/mean
+    // 原始ADC诊断：打印min/max/mean
     static uint32_t _lastSnapDbgMs = 0;
     if (millis() - _lastSnapDbgMs >= 2000) {
         _lastSnapDbgMs = millis();
@@ -289,7 +286,7 @@ void SignalProcessor::calculatePowerSpectrum() {
         float real = m_fftInputBuffer[i];
         float imag = m_fftImagBuffer[i];
         float p = (real * real + imag * imag) / (float)m_fftWindowSize;
-        // [FIX-v3.9.8] NaN/Inf保护：ADC饱和导致FFT结果异常
+        // NaN/Inf保护：ADC饱和导致FFT结果异常
         if (!isnan(p) && !isinf(p)) {
             m_powerSpectrum[i] = p;
             m_lastTotalPower += p;
@@ -313,13 +310,13 @@ float SignalProcessor::findMedianFrequency(
     float min_freq,
     float max_freq
 ) {
-    // [DEBUG] 入口参数诊断
+    // 入口参数诊断
 #ifdef MDF_DBG_ENABLED
     LOG("[MDF_DBG] ENTER sr=%.0f fmin=%.0f fmax=%.0f bins=%d",
         (double)sample_rate, (double)min_freq, (double)max_freq, (int)num_bins);
 #endif
 
-    // [FIX-v3.9.7] 异常时返回-1.0f（错误标记），不返回m_lastValidMDF
+    // 异常时返回-1.0f（错误标记），不返回m_lastValidMDF
     // 旧代码返回m_lastValidMDF导致自引用循环：
     // resetEMA()设m_lastValidMDF=80.0 → fallback返回80.0 → 被当rawMDF → EMA接受80.0 → 锁死
     if (sample_rate < 100.0f) {
@@ -340,7 +337,7 @@ float SignalProcessor::findMedianFrequency(
             total_power += power_spectrum[i];
         }
     }
-    // [DEBUG] 打印total_power（关键诊断：1e-12f阈值判断）
+    // 打印total_power（关键诊断：1e-12f阈值判断）
     if (total_power < 1e-12f) {
 #ifdef MDF_DBG_ENABLED
         LOG("[MDF_DBG] LOW_POWER tp=%.8f < 1e-12", (double)total_power);
@@ -356,7 +353,7 @@ float SignalProcessor::findMedianFrequency(
         float freq = i * freq_res;
         if (freq >= min_freq && freq <= effective_max) {
             float bp_val = power_spectrum[i];
-            // [FIX-v3.9.8] 跳过NaN/Inf bins
+            // 跳过NaN/Inf bins
             if (isnan(bp_val) || isinf(bp_val)) continue;
             prev_accumulated = accumulated;
             accumulated += bp_val;
@@ -374,13 +371,13 @@ float SignalProcessor::findMedianFrequency(
         }
         prev_freq = freq;
     }
-    // [DEBUG] 诊断：为何accumulated未达half_power
+    // 诊断：为何accumulated未达half_power
 #ifdef MDF_DBG_ENABLED
     LOG("[MDF_DBG] LOOP_END tp=%.4f acc=%.4f hp=%.4f bins=%d fmin=%.0f fmax=%.0f",
         (double)total_power, (double)accumulated, (double)half_power,
         (int)num_bins, (double)min_freq, (double)effective_max);
 #endif
-    return -1.0f;  // [FIX-v3.9.7] 频谱异常无法定位MDF
+    return -1.0f;  // 频谱异常无法定位MDF
 }
 
 float SignalProcessor::calculateMDF() {
@@ -392,7 +389,7 @@ float SignalProcessor::calculateMDF() {
     takeSnapshotIfNeeded(m_fftWindowSize);
     calculatePowerSpectrum();
 
-    // [FIX-v3.9.9] 使用ADC定时器固定采样率，不用m_actualSampleRate
+    // 使用ADC定时器固定采样率，不用m_actualSampleRate
     // m_actualSampleRate测量的是loop迭代速率，不是ADC真实采样率
     // WiFi通信会拖慢loop，导致m_actualSampleRate崩到17-25Hz
     // ADC定时器配置为1000Hz（见main.cpp adc_timer.begin(1000.0f)）
@@ -409,7 +406,7 @@ float SignalProcessor::calculateMDF() {
         (double)m_rawMDF, (double)m_currentMDF, (double)m_lastValidMDF);
 #endif
 
-    // [FIX-v3.9.7] findMedianFrequency异常时返回-1.0f，跳过本次EMA更新
+    // findMedianFrequency异常时返回-1.0f，跳过本次EMA更新
     if (m_rawMDF < 0.0f) {
         // FFT无效（功率太小或采样率异常），保持上次有效MDF，不更新EMA
         m_consecutivePhysioFrames = 0;
@@ -420,7 +417,7 @@ float SignalProcessor::calculateMDF() {
         return m_currentMDF;
     }
 
-    // [FIX-v3.9.6] 放宽上限180→250Hz：肌肉收缩时MDF可达200+Hz
+    // 放宽上限180→250Hz：肌肉收缩时MDF可达200+Hz
     // 之前180Hz上限导致rawMDF被丢弃，EMA永远输出上次值→MAX阶段锁死
     bool is_physiological = (m_rawMDF >= 10.0f && m_rawMDF <= 250.0f);
     bool is_acceptable = (m_rawMDF >= 8.0f && m_rawMDF < 10.0f);
@@ -448,7 +445,7 @@ float SignalProcessor::calculateMDF() {
         //   避免初始值偏差导致的长时间收敛等待
         // ===========================================
         float alpha;
-// [FIX-v3.9.6] 收缩状态时使用更高alpha，更快跟踪频谱变化
+// 收缩状态时使用更高alpha，更快跟踪频谱变化
         if (m_isContracting) {
             alpha = 0.35f;  // 收缩时需要更快响应，避免EMA滞后
         } else if (m_rawMDF < m_lastValidMDF && m_isMdfValid) {
@@ -507,7 +504,7 @@ void SignalProcessor::evaluateSignalQuality(float rms, float mdf) {
         quality_score += 15.0f;
     }
 
-    // [v3.9.33] Reset BEFORE increment: window stays exactly QUALITY_WINDOW_SIZE frames
+    // Reset BEFORE increment: window stays exactly QUALITY_WINDOW_SIZE frames
     if (m_qualityTotalFrames >= QUALITY_WINDOW_SIZE) {
         m_qualityTotalFrames = 0;
         m_qualityValidFrames = 0;
@@ -533,7 +530,7 @@ void SignalProcessor::updateFatigue(float rms, float mdf) {
         return;
     }
 
-    // [v3.9.30] Activation: A% = (RMS - relax_rms) / (active_rms - relax_rms) * 100
+    // Activation: A% = (RMS - relax_rms) / (active_rms - relax_rms) * 100
     // 输出 0-100%，与 fatigue 设计规则统一
     if (m_activeRMS_mV > m_relaxRMS_mV) {
         m_activation = ((rms - m_relaxRMS_mV) / (m_activeRMS_mV - m_relaxRMS_mV)) * 100.0f;
@@ -542,10 +539,10 @@ void SignalProcessor::updateFatigue(float rms, float mdf) {
         m_activation = 0.0f;
     }
 
-    // [v3.9.14] Contraction detection: RMS > 2x relax_rms
+    // Contraction detection: RMS > 2x relax_rms
     m_isContracting = (rms > m_relaxRMS_mV * 2.0f);
 
-    // [v3.9.25] Fatigue: EMA-smoothed, dynamic baseline per contraction
+    // Fatigue: EMA-smoothed, dynamic baseline per contraction
     float f_raw = 0.0f;
     if (m_relaxMDF_hz > 0.1f) {
         float baseline_mdf = m_baselineMDF_hz > 0.1f ? m_baselineMDF_hz : m_relaxMDF_hz;
@@ -604,7 +601,7 @@ float SignalProcessor::update() {
     float rms = calculateRMS();
     if (rms <= 0.0f) return 0.0f;
 
-    // [v3.9.14] 更新当前实时值（用于简化校准）
+    // 更新当前实时值（用于简化校准）
     // rms is already in mV from calculateRMS()
     m_currentRMS = rms;
 
@@ -635,32 +632,32 @@ void SignalProcessor::clearCalibration() {
     m_consecutivePhysioFrames = 0;
 }
 
-// [v3.9.14] 简化校准：获取当前实时RMS
+// 简化校准：获取当前实时RMS
 float SignalProcessor::getCurrentRms() const {
     // 返回最近计算的RMS值（m_currentRMS由update()更新）
     // 注意：这是线程安全的近似值，精确值需要调用update()后获取
     return m_currentRMS;
 }
 
-// [v3.9.14] 简化校准：获取当前实时MDF
+// 简化校准：获取当前实时MDF
 float SignalProcessor::getCurrentMdf() const {
     return m_currentMDF;
 }
 
-// [v3.9.14] 简化校准：设置放松基线
+// 简化校准：设置放松基线
 void SignalProcessor::setRelaxBaseline(float relaxRms, float relaxMdf) {
     m_relaxRMS_mV = relaxRms;
     m_relaxMDF_hz = relaxMdf;
     LOG("[SIG] Relax baseline set: rms=%.3f, mdf=%.1f\n", relaxRms, relaxMdf);
 }
 
-// [v3.9.14] 简化校准：设置收缩阶段参考
+// 简化校准：设置收缩阶段参考
 void SignalProcessor::setActiveReference(float activeRms) {
     m_activeRMS_mV = activeRms;
     LOG("[SIG] Active reference set: rms=%.3f\n", activeRms);
 }
 
-// [v3.9.24] 校准MDF缓冲区：记录校准阶段MDF值
+// 校准MDF缓冲区：记录校准阶段MDF值
 void SignalProcessor::recordCalibMdf(float mdf_hz) {
     if (m_calibMdfCount < CALIB_MDF_BUF_SIZE) {
         m_calibMdfBuffer[m_calibMdfCount++] = mdf_hz;
@@ -675,7 +672,7 @@ void SignalProcessor::recordCalibMdf(float mdf_hz) {
     SP_LOG_FULL("recordCalibMdf: count=%d, mdf=%.1f\n", m_calibMdfCount, mdf_hz);
 }
 
-// [v3.9.24] 校准MDF缓冲区：计算峰值和末尾值
+// 校准MDF缓冲区：计算峰值和末尾值
 void SignalProcessor::finalizeCalibMdf() {
     if (m_calibMdfCount == 0) {
         m_calibMdfPeak = 0.0f;
@@ -722,7 +719,7 @@ void SignalProcessor::finalizeCalibMdf() {
     LOG("[SIG] finalizeCalibMdf: peak=%.1f, end=%.1f\n", m_calibMdfPeak, m_calibMdfEnd);
 }
 
-// [v3.9.24] 重置校准MDF缓冲区
+// 重置校准MDF缓冲区
 void SignalProcessor::resetCalibMdfBuffer() {
     m_calibMdfCount = 0;
     m_calibMdfIndex = 0;
@@ -731,11 +728,11 @@ void SignalProcessor::resetCalibMdfBuffer() {
     LOG("[SIG] Calib MDF buffer reset\n");
 }
 
-// [FIX-v3.9.6] 校准阶段切换时重置EMA状态
+// 校准阶段切换时重置EMA状态
 // REST→MAX切换时频谱形态巨变，EMA残值会严重滞后
 void SignalProcessor::resetEMA() {
     m_isMdfValid = false;
-    m_lastValidMDF = 0.0f;  // [FIX-v3.9.7] 80.0f→0.0f：防止findMedianFrequency fallback自引用锁死
+    m_lastValidMDF = 0.0f;  // 80.0f→0.0f：防止findMedianFrequency fallback自引用锁死
     m_consecutivePhysioFrames = 0;
     m_currentMDF = 0.0f;
 }

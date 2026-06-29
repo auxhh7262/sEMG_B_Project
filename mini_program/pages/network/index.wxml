@@ -1,5 +1,5 @@
 <!--
-  pages/network/index.wxml — V3.0 Simplified Provisioning UI
+  pages/network/index.wxml
   配网流程: 扫描设备 → 连接 → 读 deviceId → 输入密码 → 等待结果 → 完成
 -->
 <view class="container">

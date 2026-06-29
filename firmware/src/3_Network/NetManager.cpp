@@ -1,4 +1,4 @@
-// NetManager.cpp — Cloud Version V3.1 (HTTP Mode - No HTTPS Issues)
+// NetManager.cpp — HTTP 云端上传模块
 #include "NetManager.h"
 #include "0_Base/Logger.h"
 #include <EEPROM.h>
@@ -142,7 +142,6 @@ void NetManager::_wifiTick() {
         return;
     }
 
-    // [V3.3] BLE 配网中 → 暂停所有 WiFi 操作（防止射频冲突断开 BLE）
     if (_provisioningActive) {
         return;
     }
@@ -254,7 +253,7 @@ void NetManager::_checkIngest() {
     }
 }
 
-// ==================== HTTP POST V3.2 — Robust HTTP/1.0 with Retry ====================
+// ==================== HTTP POST — Robust HTTP/1.0 with Retry ====================
 // 核心修复:
 //   1. %zu → %lu 避免 Arduino 平台格式符不兼容导致 Content-Length 乱码
 //   2. HTTP/1.0 避免 Transfer-Encoding 问题
@@ -425,7 +424,6 @@ void NetManager::uploadCalibPhase(const char* phase, float rms, float mdf,
     _httpPost(CLOUD_URL_UPLOAD_CALIB, json);
 }
 
-// [V3.2] BLE 配网后同步更新重连凭据（修复 WiFi 断连后使用过期凭据的 bug）
 void NetManager::updateSavedCredentials(const char* ssid, const char* pass) {
     strncpy(_savedSsid, ssid, sizeof(_savedSsid) - 1);
     _savedSsid[sizeof(_savedSsid) - 1] = '\0';

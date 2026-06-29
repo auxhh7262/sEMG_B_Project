@@ -1,9 +1,4 @@
-// BleConfigServer.h — V3.0 Simplified BLE Provisioning
-// 对标小米/涂鸦配网标准:
-//   - 单一职责: 仅做WiFi凭证传递 + 配网结果通知
-//   - 删除: IP推送、WifiInfoCallback、requestReset双路径
-//   - 新增: deviceId只读特征(19B10005)、配网结果通知特征(19B10006)
-//   - 统一 resetNetwork() 入口
+// BleConfigServer.h — BLE 配网模块声明
 #ifndef BLECONFIGSERVER_H
 #define BLECONFIGSERVER_H
 
@@ -41,7 +36,7 @@ public:
     // === 统一重置入口（清除 EEPROM + 断开 WiFi + 重启广播） ===
     void resetNetwork();
 
-    // === BLE 冷却期（防止连续操作崩溃，保留 v2 防护） ===
+    // === BLE 冷却期（防止连续操作崩溃） ===
     bool isInCooldown() const { return (millis() - _lastNotifyMs) < 500; }
 
     // === 静态回调 & 实例 ===
@@ -53,8 +48,8 @@ private:
     // === 状态 ===
     bool _provisioning;
     bool _deviceConnected;
-    bool _bleDeviceJustConnected;  // 非阻塞连接处理（保留 v2 防护）
-    uint32_t _lastNotifyMs;         // BLE 冷却计时器（保留 v2 防护）
+    bool _bleDeviceJustConnected;  // 非阻塞连接处理
+    uint32_t _lastNotifyMs;         // BLE 冷却计时器
 
     // === WiFi 凭证 ===
     char _currentSSID[BLE_WIFI_SSID_MAX_LEN];

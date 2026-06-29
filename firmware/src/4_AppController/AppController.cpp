@@ -1,6 +1,4 @@
-// AppController.cpp — Cloud Version
-// 删除: WebSocket deferSendJson / sendRawToClient / query_cz async pipeline
-// 新增: 校准结果上传云端 / 数据通过 pushDataPoint 批量上传
+// AppController.cpp — 业务调度主循环
 #include "AppController.h"
 #include "0_Base/Logger.h"
 #include "0_Base/Board.h"

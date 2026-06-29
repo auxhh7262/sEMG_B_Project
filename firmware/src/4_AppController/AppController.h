@@ -21,7 +21,7 @@ public:
     void tick(void);
     void onCommandReceived(AppCommand_t cmd);
 
-    // Calibration command handlers (no WS response — cloud version)
+    // Calibration command handlers
     void handleSaveCalib(int userScore = -1,
                          const char* name = nullptr, int age = 0,
                          int gender = 0, int handedness = 0);

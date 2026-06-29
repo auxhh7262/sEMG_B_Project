@@ -1,6 +1,4 @@
-// pages/network/index.js — V3.2 Simplified Provisioning
-// BLE 配网流程: 扫描 → 连接 → 读 deviceId → 写 SSID/PASS → 等通知 OK → 云端取 IP
-// V3.2 变更: 云函数改用 wx.cloud.callFunction() 而非 HTTP tx.request()
+// pages/network/index.js — 设备配网页面
 
 const { log, warn, error } = require('../../utils/logger');
 
@@ -87,7 +85,7 @@ Page({
   startScan() {
     this.setData({ status: 'scanning', statusMsg: '搜索设备中...', deviceId: '', connected: false });
 
-    // [V3.2] 防御：确保适配器已打开再扫描（适配器可能因用户关闭蓝牙等原因处于关闭态）
+    // 防御：确保适配器已打开再扫描（适配器可能因用户关闭蓝牙等原因处于关闭态）
     wx.openBluetoothAdapter({
       success: () => {
         log('[BLE] adapter ready, starting discovery');
@@ -101,7 +99,7 @@ Page({
   },
 
   _doStartScan() {
-    // [V3.2] 不传 services 过滤，避免部分手机因 UUID 格式差异滤掉设备
+    // 不传 services 过滤，避免部分手机因 UUID 格式差异滤掉设备
     wx.startBluetoothDevicesDiscovery({
       allowDuplicatesKey: false,
       success: () => log('[BLE] scan started (no UUID filter)'),
@@ -242,7 +240,7 @@ Page({
         });
         // 延迟断开 BLE，然后从云端获取设备状态
         this._disconnectBle();
-        // [V3.2] 固件 reportStatus 需要 HTTP 往返时间，延迟 3s 再查
+        // 固件 reportStatus 需要 HTTP 往返时间，延迟 3s 再查
         this._deviceStatusRetries = 0;
         if (this._deviceStatusTimer) clearTimeout(this._deviceStatusTimer);
         this._deviceStatusTimer = setTimeout(() => this._fetchDeviceStatus(), 3000);
@@ -319,7 +317,7 @@ Page({
       log('[BLE] SSID written');
       this.setData({ provisionStep: 'writing_ssid', stepsActive: 1 });
 
-      // [V3.3] 等待 100ms 固件处理 SSID
+      // 等待 100ms 固件处理 SSID
       await this._delay(100);
 
       // Step 2: 写 PASS
@@ -333,7 +331,7 @@ Page({
     } catch (err) {
       error('[BLE] write fail:', err);
       if (err.errMsg && err.errMsg.indexOf('no connection') > -1) {
-        // [V3.3] BLE 连接丢失，重连并重试一次
+        // BLE 连接丢失，重连并重试一次
         wx.showToast({ title: '连接中断，重连中...', icon: 'none' });
         this.setData({ provisionStep: 'connecting_ble', stepsActive: 0 });
         this._reconnectAndRetry();
@@ -343,7 +341,7 @@ Page({
     }
   },
 
-  // [V3.3] BLE 重连重试
+  // BLE 重连重试
   _reconnectAndRetry() {
     if (!this._device) return;
     wx.createBLEConnection({
@@ -501,7 +499,7 @@ Page({
   reProvision() {
     log('[UI] reProvision - resetting all state');
 
-    // [V3.2] 清除所有遗留定时器，防止旧回调污染新状态
+    // 清除所有遗留定时器，防止旧回调污染新状态
     if (this._scanTimer) { clearTimeout(this._scanTimer); this._scanTimer = null; }
     if (this._provisionTimer) { clearTimeout(this._provisionTimer); this._provisionTimer = null; }
     if (this._deviceStatusTimer) { clearTimeout(this._deviceStatusTimer); this._deviceStatusTimer = null; }
@@ -511,7 +509,7 @@ Page({
     this._device = null;
     this._deviceStatusRetries = 0;
 
-    // [V3.2] 停止扫描（不关适配器——关适配器会导致 startScan 时无适配器可用）
+    // 停止扫描（不关适配器——关适配器会导致 startScan 时无适配器可用）
     try { wx.stopBluetoothDevicesDiscovery(); } catch(e) {}
 
     this.setData({

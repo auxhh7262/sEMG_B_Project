@@ -46,7 +46,7 @@ static int _format_to_buf(char* buf, int bufsize, const char* fmt, va_list args)
                 unsigned long v = isLong ? va_arg(args, unsigned long)
                                          : (unsigned long)va_arg(args, unsigned int);
                 char tb[16]; ultoa(v, tb, 10); PUTS(tb);
-                // [FIX] %0Xd zero-padding (width parsed, use it)
+                // %0Xd zero-padding (width parsed, use it)
                 int ulen = strlen(tb);
                 if (width > ulen) {
                     int upad = width - ulen;
@@ -60,7 +60,7 @@ static int _format_to_buf(char* buf, int bufsize, const char* fmt, va_list args)
                 unsigned long v = isLong ? va_arg(args, unsigned long)
                                          : (unsigned long)va_arg(args, unsigned int);
                 char tb[16]; ultoa(v, tb, 16); PUTS(tb);
-                // [FIX] %0Xd zero-padding
+                // %0Xd zero-padding
                 int xlen = strlen(tb);
                 if (width > xlen) {
                     int xpad = width - xlen;
@@ -102,7 +102,7 @@ static int _format_to_buf(char* buf, int bufsize, const char* fmt, va_list args)
     return oi;
 }
 
-// [B3-3-fix] 静态全局缓冲，避免深层调用链栈溢出
+// 静态全局缓冲，避免深层调用链栈溢出
 static char g_logBuf[256];
 
 void _log_impl(const char* fmt, ...) {

@@ -1,7 +1,5 @@
 // 文件: SignalProcessor.h
-// 描述: 肌电信号处理器头文件 (Production Release)
-// 版本: V1.0.0
-// 日期: 2026-05-12
+// 描述: 肌电信号处理器头文件
 
 #ifndef SIGNAL_PROCESSOR_H
 #define SIGNAL_PROCESSOR_H
@@ -47,9 +45,9 @@ public:
     float getCurrentMdf() const;
     void setRelaxBaseline(float relaxRms, float relaxMdf);
     void setActiveReference(float activeRms);
-    // [v3.9.24] 校准MDF缓冲区接口
+    // 校准MDF缓冲区接口
     void recordCalibMdf(float mdf_hz);  // 记录校准阶段MDF值
-    void finalizeCalibMdf();             // [新增] 计算峰值和末尾MDF
+    void finalizeCalibMdf();             // 计算峰值和末尾MDF
     float getCalibMdfPeak() const { return m_calibMdfPeak; }
     float getCalibMdfEnd() const { return m_calibMdfEnd; }
     void resetCalibMdfBuffer();
@@ -62,7 +60,7 @@ public:
     bool isContracting() const;
     void setFFTWindowSize(uint16_t size);
     void setMDFFrequencyRange(float min_freq, float max_freq);
-    void resetEMA();  // [FIX-v3.9.6] 校准阶段切换时重置 EMA
+    void resetEMA();  // 校准阶段切换时重置 EMA
 
     // 调试和诊断方法
     void enableDebug(bool enable) { m_debugEnabled = enable; m_debugLevel = enable ? DEBUG_NORMAL : DEBUG_NONE; }
@@ -110,7 +108,7 @@ private:
     float m_relaxMDF_hz;
     float m_baselineMDF_hz;   // dynamic baseline per contraction
     bool m_wasActive20;       // for contraction onset detection
-    float m_contractionStartMDF;  // [v3.9.11] 收缩开始时的MDF，用于疲劳度计算
+    float m_contractionStartMDF;  // 收缩开始时的MDF，用于疲劳度计算
     bool m_isCalibrated;
     bool m_isContracting;
 
@@ -181,7 +179,7 @@ private:
 
     float m_currentRMS;           // 当前实时RMS
 
-    // [v3.9.24] 校准MDF缓冲区
+    // 校准MDF缓冲区
     static const uint16_t CALIB_MDF_BUF_SIZE = 200;
     float m_calibMdfBuffer[CALIB_MDF_BUF_SIZE];  // 校准阶段MDF值环形缓冲
     uint16_t m_calibMdfIndex;                         // 缓冲区写入索引

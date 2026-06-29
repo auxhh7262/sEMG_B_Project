@@ -1,5 +1,4 @@
-// pages/analysis/index.js — Cloud Version
-// 数据来源: 云数据库 data_points (替代 WebSocket query_cz)
+// pages/analysis/index.js — 数据分析页面
 const { log, warn } = require('../../utils/logger');
 const CLOUD_ENV = 'cloud1-d4gqmimmo05b12c94';
 

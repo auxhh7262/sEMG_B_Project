@@ -4,8 +4,6 @@
 #include <Arduino.h>
 #include <WiFiS3.h>
 
-// [CLOUD] NetManager V3.0 — WiFi + HTTP POST + 自动重连
-// V3.1: 改用 HTTP 绕过 UNO R4 WiFi HTTPS 兼容性问题
 
 #define CLOUD_BASE_DOMAIN "cloud1-d4gqmimmo05b12c94-1446329561.ap-shanghai.app.tcloudbase.com"
 
@@ -40,10 +38,7 @@ public:
     bool isWifiConnected() const { return _wifiConnected; }
     const char* getDeviceId() const { return _deviceId; }
 
-    // [V3.2] BLE 配网后同步更新重连凭据
     void updateSavedCredentials(const char* ssid, const char* pass);
-
-    // [V3.3] BLE 配网期间暂停 WiFi 重连（防止射频冲突导致 BLE 断开）
     void pauseWifiRetry()   { _provisioningActive = true; }
     void resumeWifiRetry()  { _provisioningActive = false; }
 
@@ -103,7 +98,7 @@ private:
     void (*_onWifiLostTimeout)();
     void (*_onWifiReconnected)();
     bool _bleOpened;
-    bool _provisioningActive;   // [V3.3] BLE 配网中，暂停 WiFi 重连
+    bool _provisioningActive;
     void (*_onRecordRelax)();
     void (*_onRecordActive)();
     void (*_onSaveCalib)();

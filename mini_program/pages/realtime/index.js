@@ -1,5 +1,4 @@
-// pages/realtime/index.js — Cloud Version
-// 数据来源: 云数据库 data_points 集合 watcher (替代 WebSocket)
+// pages/realtime/index.js — 实时监测页面
 const app = getApp();
 const { log, warn, error } = require('../../utils/logger');
 

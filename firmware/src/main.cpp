@@ -1,11 +1,4 @@
-// 文件: main.cpp — Cloud Version V3.0
-// 描述: sEMG 肌电疲劳监测设备 V3.0 (微信云开发 + BLE 简化配网)
-// V3.0 变更:
-//   - 移除 main 中的 BLE 状态机 (CWAIT/CCONN/CDONE) 和 WiFi 重连计数器
-//   - 配网逻辑完全封装在 BleConfigServer + NetManager 中
-//   - NetManager 自动重连 + 5 分钟断连超时回调配网模式
-//   - BleConfigServer 通过 deviceId 特征暴露固件真实 ID
-// ============================================================
+// 文件: main.cpp — 业务调度主循环
 
 #include <Arduino.h>
 #include <FspTimer.h>
@@ -46,19 +39,16 @@ FspTimer adc_timer;
 volatile bool g_adcTimerFlag = false;
 volatile uint32_t g_adcCallbackCount = 0;
 
-// ============================================================
-// [V3.0] 回调: 云端下发 reset_wifi 命令 → BLE 配网重置
-// ============================================================
+// 云端下发 reset_wifi 命令 → BLE 配网重置
 static void _onCloudResetWifi() {
     LOG("[MAIN] Cloud reset_wifi callback\n");
     gBleConfig.resetNetwork();
-    gNetManager.pauseWifiRetry();   // [V3.3] BLE 配网期间暂停 WiFi 重连
+    gNetManager.pauseWifiRetry();
 }
 
-// [V3.0] 回调: WiFi 断连 > 1分钟 → 只打开 BLE 广播（不清除 EEPROM）
+// WiFi 断连 > 1分钟 → 只打开 BLE 广播（不清除 EEPROM）
 static void _onWifiLostTimeout() {
     LOG("[MAIN] WiFi lost > 1min, opening BLE for re-provisioning\n");
-    // [V3.4] ① 先暂停 WiFi 重连，释放射频
     gNetManager.pauseWifiRetry();
     // ② 断开 WiFi 确保射频完全释放给 BLE
     WiFi.disconnect();
@@ -70,10 +60,10 @@ static void _onWifiLostTimeout() {
 static void _onWifiReconnected() {
     LOG("[MAIN] WiFi reconnected, stopping BLE\n");
     gBleConfig.stopProvisioning();   // 重连成功，关闭 BLE 广播
-    gNetManager.resumeWifiRetry();   // [V3.3] WiFi 恢复，允许后续断连重试
+    gNetManager.resumeWifiRetry();
 }
 
-// [V3.0] 校准命令回调
+// 校准命令回调
 static void _onCloudRecordRelax() {
     LOG("[MAIN] Cloud record_relax command\n");
     gAppController.handleRecordRelax();
@@ -89,7 +79,7 @@ static void _onCloudSaveCalib() {
     gAppController.handleSaveCalib();
 }
 
-// [V3.0] WiFi 凭证配网处理 — 非阻塞状态机
+// WiFi 凭证配网处理 — 非阻塞状态机
 static bool     _besConnecting = false;
 static uint32_t _besConnectStart = 0;
 
@@ -105,7 +95,6 @@ static void _handleBleCredentials() {
         EEPROM.put(0,  creds.ssid);
         EEPROM.put(64, creds.pass);
 
-        // [V3.2] 同步更新 NetManager 重连凭据（修复 WiFi 断连后使用过期凭据）
         gNetManager.updateSavedCredentials(creds.ssid, creds.pass);
 
         // 连接 WiFi
@@ -129,16 +118,13 @@ static void _handleBleCredentials() {
         LOG("[MAIN] WiFi connected! IP: %s, SSID: %s\n",
             WiFi.localIP().toString().c_str(), WiFi.SSID());
         // 注: UNO R4 WiFi 库不支持 setAutoReconnect(), 由 NetManager 内部管理重连
-
-        // [V3.2] 通知小程序配网成功（纯文本 <= 20B，适配默认 MTU=23）
-        // IP 信息由小程序从云端 getDeviceStatus 获取，避免 BLE 通知被 MTU 截断
         gBleConfig.notifyProvisionResult("OK");
 
         // 延迟 500ms 等小程序收到通知后断开 BLE
         delay(500);
         gBleConfig.stopProvisioning();
         _besConnecting = false;
-        gNetManager.resumeWifiRetry();  // [V3.3] 配网完成，恢复 WiFi 断连重试
+        gNetManager.resumeWifiRetry();
         LOG("[MAIN] BLE provisioning complete, BLE stopped\n");
 
         // 立即上报状态到云端
@@ -188,12 +174,12 @@ void setup() {
     gBleConfig.init();
 
     // 4. 网络初始化（WiFi 已配置则连接，否则后续进入配网模式）
-    bool netOk = gNetManager.initBlocking(45000);  // [V3.1] 45s timeout for cold boot
+    bool netOk = gNetManager.initBlocking(45000);
 
-    // [V3.0] 设置 deviceId 到 BLE（配网时小程序读取）
+    // 设置 deviceId 到 BLE（配网时小程序读取）
     gBleConfig.setDeviceId(gNetManager.getDeviceId());
 
-    // [V3.0] 注册回调
+    // 注册回调
     gNetManager.onResetWifi(_onCloudResetWifi);
     gNetManager.onWifiLostTimeout(_onWifiLostTimeout);
     gNetManager.onWifiReconnected(_onWifiReconnected);
@@ -209,7 +195,7 @@ void setup() {
         // WiFi 未配置或连接失败 → 进入 BLE 配网模式
         LOG("[MAIN] No WiFi config, entering BLE provisioning...\n");
         gBleConfig.startProvisioning();
-        gNetManager.pauseWifiRetry();   // [V3.3] BLE 配网期间暂停 WiFi 重连
+        gNetManager.pauseWifiRetry();
     }
 
     // 5. 1kHz ADC 定时器
@@ -274,10 +260,10 @@ void loop() {
     }
     lastTick = millis();
 
-    // 3. [V3.0] BLE 配网维护（一行搞定）
+    // BLE 配网维护
     gBleConfig.tick();
 
-    // 3.1 [V3.0] 消费 BLE 凭证 → 连接 WiFi
+    // 消费 BLE 凭证 → 连接 WiFi
     _handleBleCredentials();
 
     // 4. 网络维护 + 数据上传

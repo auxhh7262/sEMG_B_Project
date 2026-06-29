@@ -1,6 +1,4 @@
-// app.js — Cloud Version
-// 删除: wifiClient / bleClient / 连接管理 / 网络预热 / 僵尸检测
-// 新增: 云开发初始化
+// app.js
 "use strict";
 
 const CLOUD_ENV = 'cloud1-d4gqmimmo05b12c94';

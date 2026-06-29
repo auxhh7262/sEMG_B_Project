@@ -1,10 +1,4 @@
-// BleConfigServer.cpp — V3.0 Simplified BLE Provisioning
-// 对配网模块的重构: 
-//   - 删除 IP 推送特征 (19B10003)，改为配网结果通知 (19B10006)
-//   - 删除 WifiInfoCallback / triggerWifiInfoCb
-//   - 删除 requestReset() / _resetRequested 双路径
-//   - 统一 resetNetwork() 入口
-//   - 保留 v2 所有防护: 冷却期、单连接单推送、非阻塞连接处理
+// BleConfigServer.cpp — BLE 配网模块
 #include "BleConfigServer.h"
 #include "0_Base/Logger.h"
 #include <WiFiS3.h>
@@ -203,7 +197,7 @@ void BleConfigServer::resetNetwork() {
 void BleConfigServer::tick() {
     BLE.poll();
 
-    // 非阻塞连接处理（保留 v2 防护: 500ms 稳定后触发通知）
+    // 非阻塞连接处理（500ms 稳定后触发通知）
     if (_bleDeviceJustConnected) {
         static uint32_t _connStableTimer = 0;
         if (_connStableTimer == 0) {

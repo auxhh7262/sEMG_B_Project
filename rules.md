@@ -1,4 +1,4 @@
-# sEMG 项目文件组织规则
+﻿# sEMG 项目文件组织规则
 
 > 版本：v1.0 | 生效：2026-06-29
 > 本文件是项目规则的**唯一权威源**。
@@ -25,7 +25,7 @@ E:\
 | 资源 | 路径 | 说明 |
 |------|------|------|
 | **规则文件** | `rules.md` | 单一权威源，三个 Agent 都可修改并同步 |
-| **Skill 脚本** | `E:\skills\` | 共享工具，三个 Agent 都可调用和修改 |
+| **Skill 脚本** | `E:\sEMG_B_Project\skills\` | 共享工具，三个 Agent 都可调用和修改 |
 | **日志目录** | `E:\logs\` | 共享日志，三个 Agent 都可写入 |
 | **文档目录** | `E:\docs\` | 共享文档，三个 Agent 都可读写 |
 
@@ -91,14 +91,14 @@ E:\docs\
 
 ---
 
-## 规则三：共享技能脚本 `E:\skills\`
+## 规则三：共享技能脚本 `E:\sEMG_B_Project\skills\`
 
-**`E:\skills\` 是三个 AI Agent（QClaw / TRAE / WorkBuddy）的共享工具目录，任何 Agent 都可以读取、修改和调用。**
+**`E:\sEMG_B_Project\skills\` 是三个 AI Agent（QClaw / TRAE / WorkBuddy）的共享工具目录，任何 Agent 都可以读取、修改和调用。**
 
 ### 目录结构
 
 ```
-E:\skills\
+E:\sEMG_B_Project\skills\
 firmware-upload/
 ├── firmware_upload.pyw      ← 主脚本（无控制台窗口）
 └── SKILL.md                 ← 触发词 + 功能说明
@@ -109,7 +109,7 @@ workflow/
 
 ### 共享规则
 
-- **所有 AI Agent 共享**：`E:\skills\` 下的 skill 脚本对 QClaw、TRAE、WorkBuddy 都可访问
+- **所有 AI Agent 共享**：`E:\sEMG_B_Project\skills\` 下的 skill 脚本对 QClaw、TRAE、WorkBuddy 都可访问
 - **修改同步**：修改 skill 脚本后，其他 AI Agent 立即可用最新版本
 - **不依赖项目路径**：skill 脚本通过 CLI 参数传入项目路径，不硬编码
 - **调用方式**：三个 AI Agent 都使用相同命令调用 skill
@@ -120,7 +120,7 @@ workflow/
 - 支持 GUI + CLI 双模式（默认 GUI，`--cli` 切换命令行）
 - 必须有 `kill_previous()` 防止旧进程堆积
 - SKILL.md 内容必须与实际代码功能一致
-- `E:\skills\` 不是 git 仓库，不需要 `.gitignore`
+- `E:\sEMG_B_Project\skills\` 不是 git 仓库，不需要 `.gitignore`
 
 ---
 
@@ -160,7 +160,7 @@ E:\logs\
 ## AI Agent 工作禁忌
 
 - ❌ 不要在 `sEMG_B_Project\` 根目录创建任何 `.md` / `.py` / `.js` 文件
-- ❌ 不要改动 `E:\skills\` 中的 Python 脚本（skill 脚本，已稳定）
+- ❌ 不要改动 `E:\sEMG_B_Project\skills\` 中的 Python 脚本（skill 脚本，已稳定）
 - ❌ 不要随意写入 `E:\logs\`（由 skill 驱动）
 
 - ❌ 不要在文档或注释中使用 emoji（PowerShell 终端显示为乱码，且一些 AI Agent 转译会破坏 UTF-8 编码）
@@ -170,25 +170,25 @@ E:\logs\
 
 ## Skill 调用指引
 
-> `E:\skills\` 是独立于项目的工具脚本集，通过 CLI 参数传递项目路径。
+> `E:\sEMG_B_Project\skills\` 是独立于项目的工具脚本集，通过 CLI 参数传递项目路径。
 > 调用时始终使用 `pythonw`（无控制台窗口），如需日志输出用 `--cli` 模式。
 
 ### 通用调用格式
 
 ```powershell
-pythonw E:\skills\<skill>\<script>.pyw [项目路径参数] [--cli]
+pythonw E:\sEMG_B_Project\skills\<skill>\<script>.pyw [项目路径参数] [--cli]
 ```
 
 ### 各 Skill 调用命令
 
 | 操作 | 命令 | 参数说明 |
 |------|------|---------|
-| 完整部署 | `pythonw E:\skills\workflow\workflow.pyw --cli E:\sEMG_B_Project\firmware E:\sEMG_B_Project\mini_program` | 先上传固件→10秒→编译小程序 |
-| 上传固件 | `pythonw E:\skills\firmware-upload\firmware_upload.pyw --cli E:\sEMG_B_Project\firmware` | 编译+上传+串口监控GUI |
-| 编译小程序 | `pythonw E:\skills\miniprogram-upload\miniprogram_upload.pyw --cli E:\sEMG_B_Project\mini_program` | 编译+预览码+日志服务GUI |
-| Git推送 | `pythonw E:\skills\git-push\git_push.pyw --cli E:\sEMG_B_Project` | 自动 add→commit→push |
-| 分析日志 | `pythonw E:\skills\log-analyze\log_analyze.pyw --cli <firmware/mini_program>` | 分析最新日志 |
-| 部署云函数 | `pythonw E:\skills\cloudfunction-deploy\cloudfunction_deploy.pyw --cli E:\sEMG_B_Project\mini_program\cloudfunctions` | 一键部署云函数 |
+| 完整部署 | `pythonw E:\sEMG_B_Project\skills\workflow\workflow.pyw --cli E:\sEMG_B_Project\firmware E:\sEMG_B_Project\mini_program` | 先上传固件→10秒→编译小程序 |
+| 上传固件 | `pythonw E:\sEMG_B_Project\skills\firmware-upload\firmware_upload.pyw --cli E:\sEMG_B_Project\firmware` | 编译+上传+串口监控GUI |
+| 编译小程序 | `pythonw E:\sEMG_B_Project\skills\miniprogram-upload\miniprogram_upload.pyw --cli E:\sEMG_B_Project\mini_program` | 编译+预览码+日志服务GUI |
+| Git推送 | `pythonw E:\sEMG_B_Project\skills\git-push\git_push.pyw --cli E:\sEMG_B_Project` | 自动 add→commit→push |
+| 分析日志 | `pythonw E:\sEMG_B_Project\skills\log-analyze\log_analyze.pyw --cli <firmware/mini_program>` | 分析最新日志 |
+| 部署云函数 | `pythonw E:\sEMG_B_Project\skills\cloudfunction-deploy\cloudfunction_deploy.pyw --cli E:\sEMG_B_Project\mini_program\cloudfunctions` | 一键部署云函数 |
 
 ### Skill 调用原则
 

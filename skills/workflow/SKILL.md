@@ -120,7 +120,6 @@ pythonw "E:\sEMG_B_Project\skills\workflow\workflow.pyw"
 | Skill | 说明 |
 |-------|------|
 | cloudfunction-deploy | 单独调用，部署云函数到微信云 |
-| log-analyze | 单独调用，分析固件/小程序日志 |
 | git-push | 单独调用，Git 提交推送 |
 
 ---
@@ -131,4 +130,3 @@ pythonw "E:\sEMG_B_Project\skills\workflow\workflow.pyw"
 - **固件上传：** [`../firmware-upload/SKILL.md`](../firmware-upload/SKILL.md)
 - **小程序预览：** [`../miniprogram-upload/SKILL.md`](../miniprogram-upload/SKILL.md)
 - **云函数部署：** [`../cloudfunction-deploy/SKILL.md`](../cloudfunction-deploy/SKILL.md)
-- **日志分析：** [`../log-analyze/SKILL.md`](../log-analyze/SKILL.md)

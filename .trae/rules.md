@@ -191,14 +191,13 @@ pythonw E:\sEMG_B_Project\skills\<skill>\<script>.pyw [项目路径参数] [--cl
 | 上传固件 | `pythonw E:\sEMG_B_Project\skills\firmware-upload\firmware_upload.pyw --cli E:\sEMG_B_Project\firmware` | 编译+上传+串口监控GUI |
 | 编译小程序 | `pythonw E:\sEMG_B_Project\skills\miniprogram-upload\miniprogram_upload.pyw --cli E:\sEMG_B_Project\mini_program` | 编译+预览码+日志服务GUI |
 | Git推送 | `pythonw E:\sEMG_B_Project\skills\git-push\git_push.pyw --cli E:\sEMG_B_Project` | 自动 add→commit→push |
-| 分析日志 | `pythonw E:\sEMG_B_Project\skills\log-analyze\log_analyze.pyw --cli <firmware/mini_program>` | 分析最新日志 |
 | 部署云函数 | `pythonw E:\sEMG_B_Project\skills\cloudfunction-deploy\cloudfunction_deploy.pyw --cli E:\sEMG_B_Project\mini_program\cloudfunctions` | 一键部署云函数 |
 
 ### Skill 调用原则
 
 1. **优先用 workflow** — "上传并编译" 一件事用 `workflow.pyw` 完成
 2. **需要日志输出时加 `--cli`** — 不加 `--cli` 会启动 GUI 窗口
-3. **不要手动去读 E:\sEMG_B_Project\logs\ 的原始日志文件** — 用 `log-analyze` 或 `workflow analyze`
+3. **不要手动去读 E:\sEMG_B_Project\logs\ 的原始日志文件** — 用户说"分析"时 AI 自动读取并分析
 4. **不要直接调 pio.exe / cli.bat** — 都用 skill 脚本封装好的
 
 ---

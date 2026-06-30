@@ -9,12 +9,16 @@
 ## 目录层级
 
 ```
-E:\
-├── sEMG_B_Project\    ← 项目源码（只放核心代码）
-├── docs\              ← 项目文档（统一管理）
-├── skills\            ← 功能脚本（复用 Skill）
-└── logs\              ← 运行日志（自动生成）
+E:\sEMG_B_Project\
+├── firmware/           ← 固件源码
+├── mini_program/       ← 小程序源码
+├── docs/               ← 项目文档
+├── skills/             ← 共享工具脚本
+├── logs/               ← 运行时日志
+└── rules.md            ← 规则权威源（同步到各 Agent）
 ```
+
+**注意**：docs / skills / logs 都移到了项目内，通过 git 同步到所有 AI Agent。
 
 ---
 

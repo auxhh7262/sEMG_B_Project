@@ -35,7 +35,7 @@ sEMG 项目 Git 提交推送工具（GUI + CLI 双模式）。
 GUI 特点：
 - 深色终端风格界面
 - 实时显示 Git 操作日志
-- 自动保存日志到 `E:\logs\git\git_push_YYYYMMDD_HHMMSS.txt`
+- 自动保存日志到 `E:\sEMG_B_Project\logs\git\git_push_YYYYMMDD_HHMMSS.txt`
 - 可点击 [Open Logs] 按钮打开日志文件夹
 
 ---
@@ -134,7 +134,7 @@ git push origin main
 | 代理 | `http://shproxy.asrmicro.com:80` |
 | 远程 | `origin` |
 | 分支 | `main` |
-| 日志目录 | `E:\logs\git` |
+| 日志目录 | `E:\sEMG_B_Project\logs\git` |
 | 日志文件格式 | `git_push_YYYYMMDD_HHMMSS.txt` |
 
 ---

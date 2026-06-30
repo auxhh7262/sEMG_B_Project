@@ -18,6 +18,7 @@ Page({
   _historyRows: [],
   _relaxRms: null, _activeRms: null,
   _watcher: null,
+  _starting: false,
   _sessionId: null,
   _tabVisible: false,
   _lastRenderTime: 0,
@@ -45,19 +46,29 @@ Page({
 
   // ==================== Cloud DB Watch ====================
   _startWatch() {
+    if (this._watcher || this._starting) return;
+    this._starting = true;
+
     if (!wx.cloud) {
       warn('[realtime] wx.cloud not available');
+      this._starting = false;
       return;
     }
 
     // 检查云开发是否已初始化，如果未完成则等待重试
     this._ensureCloudReady().then(() => {
+      if (this._watcher) {
+        this._starting = false;
+        return;
+      }
       const db = wx.cloud.database({ env: CLOUD_ENV });
       this.setData({ connected: true });
       this._watchDataPoints(db);
     }).catch(e => {
       error('[realtime] Cloud not ready:', e);
       this.setData({ connected: false });
+    }).finally(() => {
+      this._starting = false;
     });
   },
 

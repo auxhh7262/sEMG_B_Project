@@ -27,7 +27,7 @@ E:\
 | **规则文件** | `rules.md` | 单一权威源，三个 Agent 都可修改并同步 |
 | **Skill 脚本** | `E:\sEMG_B_Project\skills\` | 共享工具，三个 Agent 都可调用和修改 |
 | **日志目录** | `E:\logs\` | 共享日志，三个 Agent 都可写入 |
-| **文档目录** | `E:\docs\` | 共享文档，三个 Agent 都可读写 |
+| **文档目录** | `E:\sEMG_B_Project\docs\` | 共享文档，三个 Agent 都可读写 |
 
 ---
 
@@ -46,7 +46,7 @@ E:\
 ### 禁止事项
 
 - ❌ 根目录禁止放 `.py` / `.pyw` / `.js` → 放到 `scripts/` 或 `skills/`
-- ❌ 根目录禁止放 `.md` 文件 → 放到 `E:\docs\`
+- ❌ 根目录禁止放 `.md` 文件 → 放到 `E:\sEMG_B_Project\docs\`
 - ❌ 禁止在 `firmware/`、`mini_program/` 内部创建独立 `.gitignore` → 统一用根的 `.gitignore`
 - ❌ 禁止提交 `node_modules` / `.pio/` / `__pycache__`
 
@@ -59,14 +59,14 @@ E:\
 
 ---
 
-## 规则二：文档 `E:\docs\`
+## 规则二：文档 `E:\sEMG_B_Project\docs\`
 
 所有文档统一放这里。
 
 ### 文档版本管理
 
 ```
-E:\docs\
+E:\sEMG_B_Project\docs\
 ├── 硬件说明.md              ← 最新版（无版本号后缀）
 ├── 固件与小程序架构.md
 ├── 小程序页面设计.md
@@ -80,9 +80,9 @@ E:\docs\
 
 ### 更新流程（必须按顺序）
 
-1. 将 `E:\docs\` 下的旧版移到 `archive\`（加版本号和日期后缀）
-2. 写入新版到 `E:\docs\`（无版本号后缀）
-3. `E:\docs\` 下始终只保留最新版
+1. 将 `E:\sEMG_B_Project\docs\` 下的旧版移到 `archive\`（加版本号和日期后缀）
+2. 写入新版到 `E:\sEMG_B_Project\docs\`（无版本号后缀）
+3. `E:\sEMG_B_Project\docs\` 下始终只保留最新版
 
 ### 命名规则
 
@@ -233,7 +233,7 @@ pythonw E:\sEMG_B_Project\skills\<skill>\<script>.pyw [项目路径参数] [--cl
 
 当用户说"更新文档"时，更新以下所有文档：
 
-#### 项目级文档（E:\docs\）
+#### 项目级文档（E:\sEMG_B_Project\docs\）
 
 | 文档 | 说明 |
 |------|------|
@@ -263,7 +263,7 @@ pythonw E:\sEMG_B_Project\skills\<skill>\<script>.pyw [项目路径参数] [--cl
 ### 更新流程
 
 1. 用户说"更新文档"
-2. AI 根据 `E:\docs\文档索引.md` 更新所有上述文档
+2. AI 根据 `E:\sEMG_B_Project\docs\文档索引.md` 更新所有上述文档
 3. AI 提交更改到 GitHub（"docs: 更新文档 (日期)"）
 4. AI 同步规则文件到各 AI Agent
 

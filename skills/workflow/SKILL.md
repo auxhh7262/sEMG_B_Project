@@ -47,20 +47,20 @@ sEMG 项目组合工作流 Skill，一键顺序启动两个子工具。
 ### 方式二：双击文件
 
 ```powershell
-双击 E:\skills\workflow\workflow.pyw
+双击 E:\sEMG_B_Project\skills\workflow\workflow.pyw
 ```
 
 ### 方式三：命令行
 
 ```powershell
 # 默认路径（E:\sEMG_B_Project）
-pythonw "E:\skills\workflow\workflow.pyw"
+pythonw "E:\sEMG_B_Project\skills\workflow\workflow.pyw"
 
 # CLI 模式（有控制台输出）
-python "E:\skills\workflow\workflow.pyw" --cli
+python "E:\sEMG_B_Project\skills\workflow\workflow.pyw" --cli
 
 # 指定固件目录 + 项目目录
-python "E:\skills\workflow\workflow.pyw" --cli E:\sEMG_B_Project\firmware E:\sEMG_B_Project
+python "E:\sEMG_B_Project\skills\workflow\workflow.pyw" --cli E:\sEMG_B_Project\firmware E:\sEMG_B_Project
 ```
 
 ---
@@ -103,7 +103,7 @@ foreach ($p in $procs) {
 }
 
 # 启动 workflow（会自动启动两个子工具）
-pythonw "E:\skills\workflow\workflow.pyw"
+pythonw "E:\sEMG_B_Project\skills\workflow\workflow.pyw"
 ```
 
 ---

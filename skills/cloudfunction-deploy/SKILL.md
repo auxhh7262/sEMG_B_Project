@@ -43,7 +43,7 @@ GUI 特点：
 
 双击 `cloudfunction_deploy.pyw` 文件：
 ```
-E:\skills\cloudfunction-deploy\cloudfunction_deploy.pyw
+E:\sEMG_B_Project\skills\cloudfunction-deploy\cloudfunction_deploy.pyw
 ```
 
 → 弹出 GUI 窗口（无黑色控制台窗口）。
@@ -64,7 +64,7 @@ foreach ($p in $procs) {
 Start-Sleep -Seconds 1
 
 # 2. 启动新的 GUI
-pythonw "E:\skills\cloudfunction-deploy\cloudfunction_deploy.pyw"
+pythonw "E:\sEMG_B_Project\skills\cloudfunction-deploy\cloudfunction_deploy.pyw"
 ```
 
 **注意**：
@@ -83,10 +83,10 @@ pythonw "E:\skills\cloudfunction-deploy\cloudfunction_deploy.pyw"
 
 ```powershell
 # GUI 模式（默认，无控制台窗口）
-pythonw "E:\skills\cloudfunction-deploy\cloudfunction_deploy.pyw"
+pythonw "E:\sEMG_B_Project\skills\cloudfunction-deploy\cloudfunction_deploy.pyw"
 
 # CLI 模式（命令行输出）
-python "E:\skills\cloudfunction-deploy\cloudfunction_deploy.pyw" --cli
+python "E:\sEMG_B_Project\skills\cloudfunction-deploy\cloudfunction_deploy.pyw" --cli
 ```
 
 ## GUI 按钮说明

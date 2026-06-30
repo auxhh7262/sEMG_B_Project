@@ -26,8 +26,8 @@ from pathlib import Path
 DEFAULT_PROJECT_DIR  = r"E:\sEMG_B_Project"
 DEFAULT_FIRMWARE_DIR = DEFAULT_PROJECT_DIR + r"\firmware"
 
-# Skills dir is always E:\skills\
-SKILLS_DIR = Path(__file__).parent.parent  # E:\skills\ (parent of workflow)
+# Skills dir is always E:\sEMG_B_Project\skills\
+SKILLS_DIR = Path(__file__).parent.parent  # E:\sEMG_B_Project\skills\ (parent of workflow)
 
 # Skill scripts
 FIRMWARE_UPLOAD_SCRIPT    = SKILLS_DIR / "firmware-upload" / "firmware_upload.pyw"

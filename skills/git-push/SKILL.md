@@ -54,7 +54,7 @@ GUI 特点：
 ### 方式二：双击文件
 
 ```powershell
-双击 E:\skills\git-push\git_push.pyw
+双击 E:\sEMG_B_Project\skills\git-push\git_push.pyw
 ```
 
 ---
@@ -63,13 +63,13 @@ GUI 特点：
 
 ```powershell
 # GUI 模式（默认，无控制台窗口）
-pythonw "E:\skills\git-push\git_push.pyw"
+pythonw "E:\sEMG_B_Project\skills\git-push\git_push.pyw"
 
 # CLI 模式（命令行输出）
-python "E:\skills\git-push\git_push.pyw" --cli
+python "E:\sEMG_B_Project\skills\git-push\git_push.pyw" --cli
 
 # 指定项目目录
-pythonw "E:\skills\git-push\git_push.pyw" E:\sEMG_C_Project
+pythonw "E:\sEMG_B_Project\skills\git-push\git_push.pyw" E:\sEMG_C_Project
 ```
 
 无 `-m` / `--dry-run` 参数支持（提交消息自动生成时间戳）。
@@ -91,7 +91,7 @@ foreach ($p in $procs) {
 Start-Sleep -Seconds 1
 
 # 启动新的 GUI
-pythonw "E:\skills\git-push\git_push.pyw"
+pythonw "E:\sEMG_B_Project\skills\git-push\git_push.pyw"
 ```
 
 ---

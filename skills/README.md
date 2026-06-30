@@ -21,7 +21,7 @@
 
 ## 概述
 
-**E:\skills** 是 sEMG 项目所有 AI Agent 的共享工具目录，包含 5 个自动化 Skill，覆盖固件上传、小程序编译、云函数部署、Git 推送和组合工作流。
+**E:\sEMG_B_Project\skills** 是 sEMG 项目所有 AI Agent 的共享工具目录，包含 5 个自动化 Skill，覆盖固件上传、小程序编译、云函数部署、Git 推送和组合工作流。
 
 **特性：**
 - 所有脚本使用 `.pyw` 扩展名（无控制台窗口）
@@ -35,11 +35,11 @@
 
 | Skill | 路径 | 功能 |
 |-------|------|------|
-| **firmware-upload** | `E:\skills\firmware-upload\` | 固件编译上传 + 串口监控 |
-| **miniprogram-upload** | `E:\skills\miniprogram-upload\` | 小程序编译 + 日志服务器 |
-| **cloudfunction-deploy** | `E:\skills\cloudfunction-deploy\` | 微信云函数批量部署 |
-| **git-push** | `E:\skills\git-push\` | Git 提交 + 推送 |
-| **workflow** | `E:\skills\workflow\` | 组合工作流（固件→小程序） |
+| **firmware-upload** | `E:\sEMG_B_Project\skills\firmware-upload\` | 固件编译上传 + 串口监控 |
+| **miniprogram-upload** | `E:\sEMG_B_Project\skills\miniprogram-upload\` | 小程序编译 + 日志服务器 |
+| **cloudfunction-deploy** | `E:\sEMG_B_Project\skills\cloudfunction-deploy\` | 微信云函数批量部署 |
+| **git-push** | `E:\sEMG_B_Project\skills\git-push\` | Git 提交 + 推送 |
+| **workflow** | `E:\sEMG_B_Project\skills\workflow\` | 组合工作流（固件→小程序） |
 
 ---
 
@@ -61,18 +61,18 @@
 ### 通用格式
 
 ```powershell
-pythonw E:\skills\<skill-name>\<script>.pyw [参数] [--cli]
+pythonw E:\sEMG_B_Project\skills\<skill-name>\<script>.pyw [参数] [--cli]
 ```
 
 ### 各 Skill 调用命令
 
 | 操作 | 命令 | 参数 |
 |------|------|------|
-| **上传固件** | `pythonw E:\skills\firmware-upload\firmware_upload.pyw --cli E:\sEMG_B_Project\firmware` | 固件目录 |
-| **编译小程序** | `pythonw E:\skills\miniprogram-upload\miniprogram_upload.pyw --cli E:\sEMG_B_Project` | 项目目录 |
-| **部署云函数** | `pythonw E:\skills\cloudfunction-deploy\cloudfunction_deploy.pyw --cli E:\sEMG_B_Project\mini_program\cloudfunctions` | 云函数目录 |
-| **Git 推送** | `pythonw E:\skills\git-push\git_push.pyw --cli E:\sEMG_B_Project` | 项目目录 |
-| **一键部署** | `pythonw E:\skills\workflow\workflow.pyw --cli E:\sEMG_B_Project\firmware E:\sEMG_B_Project` | 固件目录 + 项目目录 |
+| **上传固件** | `pythonw E:\sEMG_B_Project\skills\firmware-upload\firmware_upload.pyw --cli E:\sEMG_B_Project\firmware` | 固件目录 |
+| **编译小程序** | `pythonw E:\sEMG_B_Project\skills\miniprogram-upload\miniprogram_upload.pyw --cli E:\sEMG_B_Project` | 项目目录 |
+| **部署云函数** | `pythonw E:\sEMG_B_Project\skills\cloudfunction-deploy\cloudfunction_deploy.pyw --cli E:\sEMG_B_Project\mini_program\cloudfunctions` | 云函数目录 |
+| **Git 推送** | `pythonw E:\sEMG_B_Project\skills\git-push\git_push.pyw --cli E:\sEMG_B_Project` | 项目目录 |
+| **一键部署** | `pythonw E:\sEMG_B_Project\skills\workflow\workflow.pyw --cli E:\sEMG_B_Project\firmware E:\sEMG_B_Project` | 固件目录 + 项目目录 |
 
 ### 两种模式
 
@@ -85,13 +85,13 @@ pythonw E:\skills\<skill-name>\<script>.pyw [参数] [--cli]
 
 ```powershell
 # 上传固件（AI Agent 调用）
-pythonw E:\skills\firmware-upload\firmware_upload.pyw --cli E:\sEMG_B_Project\firmware
+pythonw E:\sEMG_B_Project\skills\firmware-upload\firmware_upload.pyw --cli E:\sEMG_B_Project\firmware
 
 # 编译小程序（AI Agent 调用）
-pythonw E:\skills\miniprogram-upload\miniprogram_upload.pyw --cli E:\sEMG_B_Project
+pythonw E:\sEMG_B_Project\skills\miniprogram-upload\miniprogram_upload.pyw --cli E:\sEMG_B_Project
 
 # 一键部署（AI Agent 调用）
-pythonw E:\skills\workflow\workflow.pyw --cli E:\sEMG_B_Project\firmware E:\sEMG_B_Project
+pythonw E:\sEMG_B_Project\skills\workflow\workflow.pyw --cli E:\sEMG_B_Project\firmware E:\sEMG_B_Project
 ```
 
 ---
@@ -100,8 +100,8 @@ pythonw E:\skills\workflow\workflow.pyw --cli E:\sEMG_B_Project\firmware E:\sEMG
 
 ### 核心原则
 
-**E:\skills** 是三个 AI Agent（QClaw / TRAE / WorkBuddy）的共享工具目录：
-- **所有 Agent 共享**：`E:\skills\` 下的 skill 脚本对 QClaw、TRAE、WorkBuddy 都可访问
+**E:\sEMG_B_Project\skills** 是三个 AI Agent（QClaw / TRAE / WorkBuddy）的共享工具目录：
+- **所有 Agent 共享**：`E:\sEMG_B_Project\skills\` 下的 skill 脚本对 QClaw、TRAE、WorkBuddy 都可访问
 - **修改同步**：修改 skill 脚本后，其他 AI Agent 立即可用最新版本
 - **不依赖项目路径**：skill 脚本通过 CLI 参数传入项目路径，不硬编码
 
@@ -168,7 +168,7 @@ AI: 告知用户发现的问题
 | **固件目录** | `E:\sEMG_B_Project\firmware` |
 | **小程序目录** | `E:\sEMG_B_Project\mini_program` |
 | **云函数目录** | `E:\sEMG_B_Project\mini_program\cloudfunctions` |
-| **Skill 脚本** | `E:\skills\` |
+| **Skill 脚本** | `E:\sEMG_B_Project\skills\` |
 | **日志目录** | `E:\sEMG_B_Project\logs\` |
 
 ### Git 远程仓库

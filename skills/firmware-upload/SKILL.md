@@ -51,7 +51,7 @@ GUI 特点：
 ### 方式二：双击文件
 
 ```powershell
-双击 E:\skills\firmware-upload\firmware_upload.pyw
+双击 E:\sEMG_B_Project\skills\firmware-upload\firmware_upload.pyw
 ```
 
 双击时会自动检测运行环境，如果双击（无 TTY）则自动切换到 `pythonw.exe` 运行。
@@ -62,13 +62,13 @@ GUI 特点：
 
 ```powershell
 # GUI 模式（默认，无控制台窗口）
-pythonw "E:\skills\firmware-upload\firmware_upload.pyw"
+pythonw "E:\sEMG_B_Project\skills\firmware-upload\firmware_upload.pyw"
 
 # CLI 模式（命令行输出）
-python "E:\skills\firmware-upload\firmware_upload.pyw" --cli
+python "E:\sEMG_B_Project\skills\firmware-upload\firmware_upload.pyw" --cli
 
 # 指定固件目录
-pythonw "E:\skills\firmware-upload\firmware_upload.pyw" E:\sEMG_C_Project\firmware
+pythonw "E:\sEMG_B_Project\skills\firmware-upload\firmware_upload.pyw" E:\sEMG_C_Project\firmware
 ```
 
 ---
@@ -88,7 +88,7 @@ foreach ($p in $procs) {
 Start-Sleep -Seconds 1
 
 # 启动新的 GUI
-pythonw "E:\skills\firmware-upload\firmware_upload.pyw"
+pythonw "E:\sEMG_B_Project\skills\firmware-upload\firmware_upload.pyw"
 ```
 
 **注意**：工具内部自带 `kill_previous()`，启动时也会杀旧进程 + 清理锁文件 + 杀 pio 进程。

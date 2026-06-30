@@ -37,13 +37,13 @@ description: 小程序编译预览 + 日志采集工具。当用户说"编译小
 
 ```powershell
 # GUI 模式（双击或 pythonw 运行，无控制台窗口）
-pythonw "E:\skills\miniprogram-upload\miniprogram_upload.pyw"
+pythonw "E:\sEMG_B_Project\skills\miniprogram-upload\miniprogram_upload.pyw"
 
 # CLI 模式（有控制台输出）
-python "E:\skills\miniprogram-upload\miniprogram_upload.pyw" --cli
+python "E:\sEMG_B_Project\skills\miniprogram-upload\miniprogram_upload.pyw" --cli
 
 # 指定项目目录
-pythonw "E:\skills\miniprogram-upload\miniprogram_upload.pyw" E:\sEMG_B_Project
+pythonw "E:\sEMG_B_Project\skills\miniprogram-upload\miniprogram_upload.pyw" E:\sEMG_B_Project
 ```
 
 ---
@@ -125,7 +125,7 @@ foreach ($p in $procs) {
 Start-Sleep -Seconds 1
 
 # 启动新的 GUI
-pythonw "E:\skills\miniprogram-upload\miniprogram_upload.pyw"
+pythonw "E:\sEMG_B_Project\skills\miniprogram-upload\miniprogram_upload.pyw"
 ```
 
 ---

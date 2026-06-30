@@ -1,4 +1,4 @@
-# Firmware build artifacts
+﻿# Firmware build artifacts
 firmware/.pio/
 .pio/
 compile_commands.json

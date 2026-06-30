@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """
 sEMG Git Push Tool (All-in-One)
 Usage:
@@ -32,7 +32,7 @@ PROXY = "http://shproxy.asrmicro.com:80"
 REMOTE = "origin"
 BRANCH = "main"
 
-LOG_DIR = Path(r"E:\logs\git")
+LOG_DIR = Path(r"E:\sEMG_B_Project\logs\git")
 os.makedirs(LOG_DIR, exist_ok=True)
 
 def kill_previous():

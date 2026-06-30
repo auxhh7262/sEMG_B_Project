@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """
 sEMG Cloud Function Deploy Tool (All-in-One)
 Usage:
@@ -38,7 +38,7 @@ from pathlib import Path
 SCRIPT_DIR = Path(__file__).parent.resolve()
 DEFAULT_PROJECT_DIR = Path(r"E:\sEMG_B_Project")
 DEFAULT_CF_DIR = DEFAULT_PROJECT_DIR / "mini_program" / "cloudfunctions"
-LOG_DIR = Path(r"E:\logs\cloudfunction")
+LOG_DIR = Path(r"E:\sEMG_B_Project\logs\cloudfunction")
 ENV_ID = "cloud1-d4gqmimmo05b12c94"
 TCB_CMD = "tcb"
 

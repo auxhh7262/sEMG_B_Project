@@ -26,7 +26,7 @@ E:\
 |------|------|------|
 | **规则文件** | `rules.md` | 单一权威源，三个 Agent 都可修改并同步 |
 | **Skill 脚本** | `E:\sEMG_B_Project\skills\` | 共享工具，三个 Agent 都可调用和修改 |
-| **日志目录** | `E:\logs\` | 共享日志，三个 Agent 都可写入 |
+| **日志目录** | `E:\sEMG_B_Project\logs\` | 共享日志，三个 Agent 都可写入 |
 | **文档目录** | `E:\sEMG_B_Project\docs\` | 共享文档，三个 Agent 都可读写 |
 
 ---
@@ -124,12 +124,12 @@ workflow/
 
 ---
 
-## 规则四：运行日志 `E:\logs\`
+## 规则四：运行日志 `E:\sEMG_B_Project\logs\`
 
 ### 目录结构
 
 ```
-E:\logs\
+E:\sEMG_B_Project\logs\
 ├── serial\             ← 固件串口日志：serial_log_YYYYMMDD_HHMMSS.txt
 ├── mini\               ← 小程序日志：mini_log_YYYYMMDD_HHMMSS.txt
 ├── git\                ← Git 操作日志
@@ -161,7 +161,7 @@ E:\logs\
 
 - ❌ 不要在 `sEMG_B_Project\` 根目录创建任何 `.md` / `.py` / `.js` 文件
 - ❌ 不要改动 `E:\sEMG_B_Project\skills\` 中的 Python 脚本（skill 脚本，已稳定）
-- ❌ 不要随意写入 `E:\logs\`（由 skill 驱动）
+- ❌ 不要随意写入 `E:\sEMG_B_Project\logs\`（由 skill 驱动）
 
 - ❌ 不要在文档或注释中使用 emoji（PowerShell 终端显示为乱码，且一些 AI Agent 转译会破坏 UTF-8 编码）
 - ❌ 批量文件操作优先使用 edit 工具，避免用 PowerShell 做字符串替换（管道会损坏 UTF-8 中文）
@@ -194,7 +194,7 @@ pythonw E:\sEMG_B_Project\skills\<skill>\<script>.pyw [项目路径参数] [--cl
 
 1. **优先用 workflow** — "上传并编译" 一件事用 `workflow.pyw` 完成
 2. **需要日志输出时加 `--cli`** — 不加 `--cli` 会启动 GUI 窗口
-3. **不要手动去读 E:\logs\ 的原始日志文件** — 用 `log-analyze` 或 `workflow analyze`
+3. **不要手动去读 E:\sEMG_B_Project\logs\ 的原始日志文件** — 用 `log-analyze` 或 `workflow analyze`
 4. **不要直接调 pio.exe / cli.bat** — 都用 skill 脚本封装好的
 
 ---
@@ -208,8 +208,8 @@ pythonw E:\sEMG_B_Project\skills\<skill>\<script>.pyw [项目路径参数] [--cl
 用户说"分析"时，AI Agent 应：
 
 1. 读取对应的日志目录：
-   - 固件日志：`E:\logs\serial\`
-   - 小程序日志：`E:\logs\mini\`
+   - 固件日志：`E:\sEMG_B_Project\logs\serial\`
+   - 小程序日志：`E:\sEMG_B_Project\logs\mini\`
 2. 读取最新生成的日志文件
 3. 输出完整的分析报告（包含所有发现的异常）
 4. 告知用户发现了哪些问题，供进一步讨论

@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """
 sEMG Firmware Upload Tool (All-in-One)
 Usage:
@@ -37,7 +37,7 @@ from pathlib import Path
 # Config
 SCRIPT_DIR = Path(__file__).parent.resolve()
 FIRMWARE_DIR_DEFAULT = r"E:\sEMG_B_Project\firmware"
-LOG_DIR = Path(r"E:\logs\serial")
+LOG_DIR = Path(r"E:\sEMG_B_Project\logs\serial")
 PORT = 'COM4'
 BAUD = 115200
 PIO_EXE = r"C:\Users\honghuang\.platformio\penv\Scripts\pio.exe"

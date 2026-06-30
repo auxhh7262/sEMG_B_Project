@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """
 sEMG Mini Program Compile + Log Server Tool (All-in-One)
 Usage:
@@ -28,7 +28,7 @@ from tkinter import scrolledtext
 SCRIPT_DIR = Path(__file__).parent.resolve()
 DEFAULT_PROJECT_DIR = Path(r"E:\sEMG_B_Project")
 CLI_PATH = r"D:\Program Files\微信web开发者工具\cli.bat"
-LOG_DIR = Path(r"E:\logs\mini")
+LOG_DIR = Path(r"E:\sEMG_B_Project\logs\mini")
 PORT = 9876
 FILTER_KEYWORDS = ["LogForward", "heartbeat", "ping", "pong"]
 

@@ -675,16 +675,17 @@ Page({
       }
 
       // ── 生成 CSV ──
-      const header = 'Timestamp,RMS(uV),Activation(%),MDF(Hz),Fatigue(%),Quality\n';
+      const header = 'Date,Time,RMS(uV),Activation(%),MDF(Hz),Fatigue(%),Quality\n';
       const rows = allData.map(d => {
         const dt = new Date(d.timestamp);
-        const ts = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}:${String(dt.getSeconds()).padStart(2,'0')}.${String(dt.getMilliseconds()).padStart(3,'0')}`;
+        const dateStr = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+        const timeStr = `${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}:${String(dt.getSeconds()).padStart(2,'0')}.${String(dt.getMilliseconds()).padStart(3,'0')}`;
         const rms = ((d.rms || 0) / 1000).toFixed(3);
         const activation = ((d.activation || 0) / 10).toFixed(1);
         const mdf = ((d.mdf || 0) / 10).toFixed(1);
         const fatigue = ((d.fatigue || 0) / 10).toFixed(1);
         const quality = d.quality || 0;
-        return `${ts},${rms},${activation},${mdf},${fatigue},${quality}`;
+        return `="${dateStr}",="${timeStr}",${rms},${activation},${mdf},${fatigue},${quality}`;
       }).join('\n');
 
       const csv = header + rows;

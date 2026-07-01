@@ -116,7 +116,11 @@ Page({
       this.setData({ isLoading: false, errorMsg: '请选择查询日期范围' });
       return;
     }
-    this.setData({ isLoading: true, errorMsg: '', isEmpty: false });
+    this.setData({
+      isLoading: true, errorMsg: '', isEmpty: false,
+      exportPath: '', exportFileName: '', showShareBtn: false,
+      queryResultTip: '',
+    });
 
     try {
       let queryData = { startDate, endDate };
@@ -675,7 +679,7 @@ Page({
       }
 
       // ── 生成 CSV ──
-      const header = 'Date,Time,RMS(uV),Activation(%),MDF(Hz),Fatigue(%),Quality\n';
+      const header = 'Date,Time,RMS(mV),Activation(%),MDF(Hz),Fatigue(%),Quality\n';
       const rows = allData.map(d => {
         const dt = new Date(d.timestamp);
         const dateStr = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;

@@ -1,4 +1,4 @@
-﻿# Firmware build artifacts
+# Firmware build artifacts
 firmware/.pio/
 .pio/
 compile_commands.json
@@ -51,4 +51,8 @@ mini_program/cloudbaserc.json
 # Temp / scratch files
 temp_skill_md/
 *.ps1
+
+# Debug logs (搜狗输入法等产生的调试日志)
+*.log
+debug.log
 

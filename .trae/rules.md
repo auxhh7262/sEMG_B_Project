@@ -1,4 +1,4 @@
-﻿# sEMG 项目文件组织规则
+# sEMG 项目文件组织规则
 
 > 版本：v1.6 | 生效：2026-06-30
 > 本文件是项目规则的**唯一权威源**。
@@ -158,6 +158,7 @@ E:\sEMG_B_Project\logs\
   - `scripts/`
   - `logs/`
   - `.vscode/`、`.idea/`
+  - `*.log`、`debug.log`（搜狗输入法等产生的调试日志，禁止提交）
 
 ---
 
@@ -166,6 +167,7 @@ E:\sEMG_B_Project\logs\
 - ❌ 不要在 `sEMG_B_Project\` 根目录创建任何 `.md` / `.py` / `.js` 文件
 - ❌ 不要改动 `E:\sEMG_B_Project\skills\` 中的 Python 脚本（skill 脚本，已稳定）
 - ❌ 不要随意写入 `E:\sEMG_B_Project\logs\`（由 skill 驱动）
+- ❌ 不要提交 `debug.log` 或任何 `.log` 文件（搜狗输入法等产生，已加入 .gitignore）
 
 - ❌ 不要在文档或注释中使用 emoji（PowerShell 终端显示为乱码，且一些 AI Agent 转译会破坏 UTF-8 编码）
 - ❌ 批量文件操作优先使用 edit 工具，避免用 PowerShell 做字符串替换（管道会损坏 UTF-8 中文）

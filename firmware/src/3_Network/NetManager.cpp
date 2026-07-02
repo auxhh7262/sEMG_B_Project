@@ -15,6 +15,12 @@ NetManager::NetManager()
     , _lastIngestMs(0)
     , _lastCommandCheck(0)
     , _lastStatusReport(0)
+    , _minuteStartSec(0)
+    , _rmsSum(0), _rmsMax(0), _rmsMin(999999)
+    , _mdfSum(0), _mdfMax(0)
+    , _fatigueSum(0), _fatigueMax(0)
+    , _qualitySum(0)
+    , _minuteCount(0)
     , _onResetWifi(nullptr)
     , _onWifiLostTimeout(nullptr)
     , _onRecordRelax(nullptr)
@@ -158,7 +164,7 @@ void NetManager::_handleNtp() {
         unsigned long lowWord = word(_ntpPacketBuffer[42], _ntpPacketBuffer[43]);
         unsigned long secsSince1900 = highWord << 16 | lowWord;
         const unsigned long seventyYears = 2208988800UL;
-        _ntpBaseSec = secsSince1900 - seventyYears + TIMEZONE_OFFSET;
+        _ntpBaseSec = secsSince1900 - seventyYears;
         _ntpBaseMs = millis();
         _timeSynced = true;
         _ntpPending = false;
@@ -193,7 +199,7 @@ void NetManager::getTimeString(char* buf, size_t len) {
     uint32_t epoch = getCurrentTimeSec();
     uint32_t msPart = (millis() - _ntpBaseMs) % 1000;
 
-    uint32_t seconds = epoch % 86400;
+    uint32_t seconds = (epoch + TIMEZONE_OFFSET) % 86400;
     uint8_t h = seconds / 3600;
     uint8_t m = (seconds % 3600) / 60;
     uint8_t s = seconds % 60;
@@ -258,11 +264,32 @@ void NetManager::_wifiTick() {
     }
 }
 
-// 云端使用服务器时间，无需上传 ts 字段
+// 记录NTP时间戳（0表示未同步），云端fallback到服务器时间
 bool NetManager::pushDataPoint(float rms, float act,
                                 float mdf, float fatigue, uint8_t quality) {
+    uint32_t tsSec = getCurrentTimeSec();  // NTP同步的Unix秒数，未同步时为0
+
+    // ===== 分钟统计累计 =====
+    _updateMinuteStats(rms, mdf, fatigue, quality);
+
+    // ===== 分钟边界检测 =====
+    // 每60秒触发一次分钟统计上传
+    if (_timeSynced && tsSec > 0) {
+        uint32_t currentMinute = tsSec / 60;
+        uint32_t startMinute = _minuteStartSec / 60;
+        if (_minuteStartSec > 0 && currentMinute > startMinute && _minuteCount > 0) {
+            _uploadMinuteStats();
+            _resetMinuteStats();
+            _minuteStartSec = tsSec;
+        }
+        if (_minuteStartSec == 0) {
+            _minuteStartSec = tsSec;
+        }
+    }
+
     if (_retryCount < INGEST_RETRY_QUEUE) {
         uint8_t idx = (_retryHead + _retryCount) % INGEST_RETRY_QUEUE;
+        _retryQueue[idx].timestamp_sec = tsSec;
         _retryQueue[idx].rms = rms;
         _retryQueue[idx].act = act;
         _retryQueue[idx].mdf = mdf;
@@ -272,6 +299,7 @@ bool NetManager::pushDataPoint(float rms, float act,
     }
 
     if (_batchCount < INGEST_BATCH_FRAMES) {
+        _batchBuffer[_batchCount].timestamp_sec = tsSec;
         _batchBuffer[_batchCount].rms = rms;
         _batchBuffer[_batchCount].act = act;
         _batchBuffer[_batchCount].mdf = mdf;
@@ -299,8 +327,10 @@ void NetManager::_checkIngest() {
 
     for (uint8_t i = 0; i < _batchCount; i++) {
         if (i > 0) pos += snprintf(_jsonBuf + pos, sizeof(_jsonBuf) - pos, ",");
+        // 格式: [timestamp_sec, rms*1000, act*10, mdf*10, fatigue*10, quality]
         pos += snprintf(_jsonBuf + pos, sizeof(_jsonBuf) - pos,
-                 "[%d,%d,%d,%d,%d]",
+                 "[%lu,%d,%d,%d,%d,%d]",
+                 (unsigned long)_batchBuffer[i].timestamp_sec,
                  (int)(_batchBuffer[i].rms * 1000),
                  (int)(_batchBuffer[i].act * 10),
                  (int)(_batchBuffer[i].mdf * 10),
@@ -621,8 +651,8 @@ void NetManager::_reportStatus() {
         WiFi.localIP().toString().c_str(),
         WiFi.SSID());
 
-    LOG("[NET] Reporting status: IP=%s, SSID=%s\n",
-        WiFi.localIP().toString().c_str(), WiFi.SSID());
+    // LOG("[NET] Reporting status: IP=%s, SSID=%s\n",
+    //     WiFi.localIP().toString().c_str(), WiFi.SSID());
     _httpPost(CLOUD_URL_REPORT_STATUS, json);
 }
 
@@ -632,4 +662,64 @@ void NetManager::_ackCommand(const char* commandId) {
         "{\"command_id\":\"%s\",\"status\":\"done\"}",
         commandId);
     _httpPost(CLOUD_URL_ACK_COMMAND, json);
+}
+
+// ==================== 分钟统计辅助函数 ====================
+
+void NetManager::_updateMinuteStats(float rms, float mdf, float fatigue, uint8_t quality) {
+    _rmsSum += rms;
+    if (rms > _rmsMax) _rmsMax = rms;
+    if (rms < _rmsMin) _rmsMin = rms;
+
+    _mdfSum += mdf;
+    if (mdf > _mdfMax) _mdfMax = mdf;
+
+    _fatigueSum += fatigue;
+    if (fatigue > _fatigueMax) _fatigueMax = fatigue;
+
+    _qualitySum += quality;
+    _minuteCount++;
+}
+
+void NetManager::_resetMinuteStats() {
+    _rmsSum = 0;
+    _rmsMax = 0;
+    _rmsMin = 999999;
+    _mdfSum = 0;
+    _mdfMax = 0;
+    _fatigueSum = 0;
+    _fatigueMax = 0;
+    _qualitySum = 0;
+    _minuteCount = 0;
+}
+
+void NetManager::_uploadMinuteStats() {
+    if (_minuteCount == 0 || !_wifiConnected) return;
+
+    // 计算平均值（保留原始整数精度）
+    float rmsAvg = _rmsSum / _minuteCount;
+    float mdfAvg = _mdfSum / _minuteCount;
+    float fatigueAvg = _fatigueSum / _minuteCount;
+    float qualityAvg = (float)_qualitySum / _minuteCount;
+
+    // 分钟起始时间（秒级，云端转毫秒）
+    uint32_t minuteTsSec = _minuteStartSec;
+
+    char json[512];
+    snprintf(json, sizeof(json),
+        "{\"device_id\":\"%s\",\"timestamp\":%lu,"
+        "\"rms_avg\":%.3f,\"rms_max\":%.3f,\"rms_min\":%.3f,"
+        "\"mdf_avg\":%.1f,\"mdf_max\":%.1f,"
+        "\"fatigue_avg\":%.1f,\"fatigue_max\":%.1f,"
+        "\"quality_avg\":%.1f,\"count\":%u}",
+        _deviceId, (unsigned long)minuteTsSec,
+        rmsAvg, _rmsMax, _rmsMin,
+        mdfAvg, _mdfMax,
+        fatigueAvg, _fatigueMax,
+        qualityAvg, (unsigned)_minuteCount);
+
+    // LOG("[NET] Uploading minute stats: ts=%lu, count=%u\n",
+    //     (unsigned long)minuteTsSec, (unsigned)_minuteCount);
+    bool ok = _httpPost(CLOUD_URL_UPLOAD_STATS, json);
+    // LOG("[NET] Minute stats upload: %s\n", ok ? "OK" : "FAIL");
 }

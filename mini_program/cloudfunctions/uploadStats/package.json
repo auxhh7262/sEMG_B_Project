@@ -1,0 +1,9 @@
+{
+  "name": "uploadStats",
+  "version": "1.0.0",
+  "description": "固件上传分钟统计数据到 stats_minutes 集合",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "latest"
+  }
+}

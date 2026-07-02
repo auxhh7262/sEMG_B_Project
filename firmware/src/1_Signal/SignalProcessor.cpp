@@ -585,12 +585,12 @@ void SignalProcessor::updateFatigue(float rms, float mdf) {
     }
     m_wasActive20 = (activation > 20.0f);
 
-    static uint32_t fatigue_log_cnt = 0;
-    if (++fatigue_log_cnt >= 600) {
-        fatigue_log_cnt = 0;
-        LOG("[SIG] Fatigue: mdf=%.1f, bl_mdf=%.1f, f_raw=%.1f, f_ema=%.1f, act=%.0f\n",
-            mdf, (m_baselineMDF_hz > 0.1f ? m_baselineMDF_hz : m_relaxMDF_hz), f_raw, m_fatigue, activation);
-    }
+    // static uint32_t fatigue_log_cnt = 0;
+    // if (++fatigue_log_cnt >= 600) {
+    //     fatigue_log_cnt = 0;
+    //     LOG("[SIG] Fatigue: mdf=%.1f, bl_mdf=%.1f, f_raw=%.1f, f_ema=%.1f, act=%.0f\n",
+    //         mdf, (m_baselineMDF_hz > 0.1f ? m_baselineMDF_hz : m_relaxMDF_hz), f_raw, m_fatigue, activation);
+    // }
 }
 
 // ==================== 对外接口 ====================

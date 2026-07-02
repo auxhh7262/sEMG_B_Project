@@ -15,6 +15,7 @@
 #define CLOUD_URL_REPORT_STATUS     "http://" CLOUD_BASE_DOMAIN "/reportDeviceStatus"
 #define CLOUD_URL_ACK_COMMAND       "http://" CLOUD_BASE_DOMAIN "/ackDeviceCommand"
 #define CLOUD_URL_UPLOAD_CALIB      "http://" CLOUD_BASE_DOMAIN "/uploadCalibration"
+#define CLOUD_URL_UPLOAD_STATS      "http://" CLOUD_BASE_DOMAIN "/uploadStats"
 
 // 上传参数
 #define INGEST_BATCH_FRAMES    10    // 每批上传帧数 (1秒 @ 10Hz)
@@ -27,7 +28,7 @@ public:
 
     bool initBlocking(uint32_t wifiTimeoutMs = 30000);
     void tick();
-    // 云端使用服务器时间，无需上传 ts 字段
+    // 上传timestamp_sec（NTP同步的Unix秒数），云端转换为毫秒
     bool pushDataPoint(float rms, float act, float mdf,
                        float fatigue, uint8_t quality);
     void uploadCalibration(float relaxRms, float relaxMdf,
@@ -76,6 +77,7 @@ private:
     byte _ntpPacketBuffer[48];
 
     struct DataPoint {
+        uint32_t timestamp_sec;  // NTP同步的Unix秒数（0表示未同步）
         float rms, act, mdf, fatigue;
         uint8_t quality;
     };
@@ -108,6 +110,17 @@ private:
     void _reportStatus();
     void _ackCommand(const char* commandId);
     void _handleNtp();
+    void _updateMinuteStats(float rms, float mdf, float fatigue, uint8_t quality);
+    void _uploadMinuteStats();
+    void _resetMinuteStats();
+
+    // 分钟统计累计变量
+    uint32_t _minuteStartSec;    // 当前分钟起始秒数
+    float _rmsSum, _rmsMax, _rmsMin;
+    float _mdfSum, _mdfMax;
+    float _fatigueSum, _fatigueMax;
+    uint16_t _qualitySum;
+    uint16_t _minuteCount;      // 当前分钟有效帧数
 
     void (*_onResetWifi)();
     void (*_onWifiLostTimeout)();

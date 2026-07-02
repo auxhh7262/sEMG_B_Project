@@ -5,7 +5,8 @@ const db = cloud.database();
 
 const BATCH_MAX = 100; // 单次最多写入 100 条
 
-// 字段顺序固定：[rms, activation, mdf, fatigue, quality]
+// 字段顺序固定：[timestamp_sec, rms*1000, act*10, mdf*10, fatigue*10, quality]
+// timestamp_sec 是固件 NTP 同步后的 UTC 秒数
 exports.main = async (event, context) => {
   console.log('[dataIngest] RAW event:', JSON.stringify(event));
 
@@ -30,32 +31,51 @@ exports.main = async (event, context) => {
 
   try {
     const coll = db.collection('data_points');
-    const serverTime = Date.now();
-    const now = serverTime;
+    const serverNowMs = Date.now();
 
-    // 分批写入（微信云单次最多 100 条）
     let written = 0;
 
     for (let i = 0; i < points.length; i += BATCH_MAX) {
       const batch = points.slice(i, i + BATCH_MAX);
-      const ops = batch.map((point, idx) => {
-        // point 格式固定：[rms*1000, activation*10, mdf*10, fatigue*10, quality]
-        const [rmsRaw, activationRaw, mdfRaw, fatigueRaw, qualityRaw] = point;
-        const timestamp = now + (i + idx) * 100; // 每帧间隔 100ms
-        return coll.add({
-          data: {
-            timestamp,
-            rms: rmsRaw || 0,              // 存原始整数（×1000），页面负责 /1000 显示
-            activation: activationRaw || 0,  // 存原始整数（×10）
-            mdf: mdfRaw || 0,              // 存原始整数（×10）
-            fatigue: fatigueRaw || 0,      // 存原始整数（×10）
-            quality: qualityRaw || 0,
-            created_at: now
-          }
-        });
+      const batchDocs = batch.map((point, idx) => {
+        const [tsSec, rmsRaw, actRaw, mdfRaw, fatigueRaw, qualityRaw] = point;
+
+        // timestamp: UTC 毫秒（供 orderBy 排序）
+        let timestamp;
+        if (tsSec > 1700000000) {
+          // 固件 NTP 时间戳有效（> 2023-11-14），每帧间隔约 100ms
+          timestamp = tsSec * 1000 + (i + idx) * 100;
+        } else {
+          timestamp = serverNowMs + (i + idx) * 100;
+        }
+
+        // timeStr: 北京时间字符串 HH:MM:SS.sss
+        // 纯算术计算，避开 Date 构造函数的所有时区陷阱
+        const beijingSec = (tsSec > 1700000000) ? (tsSec + 8 * 3600) : 0;
+        let timeStr = '--:--:--';
+        if (beijingSec > 0) {
+          const h = Math.floor(beijingSec / 3600) % 24;
+          const m = Math.floor(beijingSec / 60) % 60;
+          const s = beijingSec % 60;
+          const ms = (i + idx) * 100; // 帧偏移毫秒
+          timeStr = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}.${String(ms).padStart(3,'0')}`;
+        }
+
+        return {
+          timestamp,
+          timeStr,
+          rms: rmsRaw || 0,
+          activation: actRaw || 0,
+          mdf: mdfRaw || 0,
+          fatigue: fatigueRaw || 0,
+          quality: qualityRaw || 0,
+          created_at: serverNowMs
+        };
       });
-      await Promise.all(ops);
-      written += batch.length;
+
+      // 逐条 add + 并发写入（微信云 add 不支持数组批量）
+      await Promise.all(batchDocs.map(doc => coll.add({ data: doc })));
+      written += batchDocs.length;
     }
 
     return { code: 0, msg: 'ok', written };

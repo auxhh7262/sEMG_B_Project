@@ -278,11 +278,11 @@ void loop() {
     if (millis() - _hbTimer > 60000) {
         _hbTimer = millis();
         _hbCount++;
-        LOG("[HB] #%lu alive, ADC_cb=%lu, WiFi=%d, prov=%d, buf=%u\n",
-            (unsigned long)_hbCount,
-            (unsigned long)g_adcCallbackCount,
-            (int)WiFi.status(),
-            (int)gBleConfig.isProvisioning(),
-            gSignal.getBufferAvailable());
+        // LOG("[HB] #%lu alive, ADC_cb=%lu, WiFi=%d, prov=%d, buf=%u\n",
+        //     (unsigned long)_hbCount,
+        //     (unsigned long)g_adcCallbackCount,
+        //     (int)WiFi.status(),
+        //     (int)gBleConfig.isProvisioning(),
+        //     gSignal.getBufferAvailable());
     }
 }

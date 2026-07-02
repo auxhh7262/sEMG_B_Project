@@ -689,7 +689,7 @@ Page({
         const mdf = ((d.mdf || 0) / 10).toFixed(1);
         const fatigue = ((d.fatigue || 0) / 10).toFixed(1);
         const quality = d.quality || 0;
-        return `="${dateStr}",="${timeStr}",${rms},${activation},${mdf},${fatigue},${quality}`;
+        return `${dateStr},${timeStr},${rms},${activation},${mdf},${fatigue},${quality}`;
       }).join('\n');
 
       const csv = header + rows;

@@ -35,6 +35,10 @@ Page({
   _deviceId: '',
   _pollingTimer: null,
   _calibPhase: 'idle',
+  _commandSent: false,
+  _phaseTimeout: null,
+  _phaseStartTs: 0,
+  _calibStartTs: 0,
 
   onLoad() {
     logger.log('[calibrate] onLoad');
@@ -168,7 +172,13 @@ Page({
   },
 
   async _startRelaxPhase() {
-    // 清除旧校准数据，避免 !this.data.relaxRms 守卫阻止新校准的状态跳转
+    if (this._commandSent) {
+      logger.warn('[calibrate] _startRelaxPhase ignored: command already sent');
+      return;
+    }
+    this._commandSent = true;
+    this._calibStartTs = Date.now();
+
     wx.removeStorageSync('calib_data');
     this.setData({
       phase: 'relax',
@@ -183,22 +193,28 @@ Page({
       saved: false,
     });
 
-    // 发送 record_relax 命令
     try {
       await this._sendCommand('record_relax');
       logger.log('[calibrate] record_relax sent');
     } catch (e) {
       logger.error('[calibrate] send record_relax failed:', e);
       wx.showToast({ title: '发送失败', icon: 'none' });
+      this._commandSent = false;
       this._resetAll();
       return;
     }
 
-    // 开始轮询校准状态
+    this._setPhaseTimeout(20, '放松校准超时，请重试');
     this._startPolling();
   },
 
   async _startActivePhase() {
+    if (this._commandSent) {
+      logger.warn('[calibrate] _startActivePhase ignored: command already sent');
+      return;
+    }
+    this._commandSent = true;
+
     this.setData({
       phase: 'active_contract',
       statusText: '请全力握紧拳头，保持15秒！',
@@ -206,18 +222,18 @@ Page({
       liveActiveMdf: null,
     });
 
-    // 发送 record_active 命令
     try {
       await this._sendCommand('record_active');
       logger.log('[calibrate] record_active sent');
     } catch (e) {
       logger.error('[calibrate] send record_active failed:', e);
       wx.showToast({ title: '发送失败', icon: 'none' });
+      this._commandSent = false;
       this._resetAll();
       return;
     }
 
-    // 重启轮询，等待固件上传 active 数据
+    this._setPhaseTimeout(30, '主动收缩校准超时，请重试');
     this._startPolling();
   },
 
@@ -308,26 +324,62 @@ Page({
     }
   },
 
+  _clearPhaseTimeout() {
+    if (this._phaseTimeout) {
+      clearTimeout(this._phaseTimeout);
+      this._phaseTimeout = null;
+    }
+  },
+
+  _setPhaseTimeout(seconds, timeoutMsg) {
+    this._clearPhaseTimeout();
+    this._phaseStartTs = Date.now();
+    this._phaseTimeout = setTimeout(() => {
+      logger.warn('[calibrate] phase timeout after', seconds, 's');
+      this._stopPolling();
+      this._commandSent = false;
+      this.setData({
+        phase: 'idle',
+        statusText: timeoutMsg || '校准超时，请重试',
+      });
+      wx.showToast({ title: timeoutMsg || '校准超时', icon: 'none' });
+    }, seconds * 1000);
+  },
+
   async _pollCalibStatus() {
     if (!wx.cloud || !this._deviceId) return;
 
     try {
       const db = wx.cloud.database({ env: CLOUD_ENV });
 
-      // 查该设备最新的校准 session（不限状态，relax阶段 status=calibrating）
+      let session = null;
+
       const res = await db.collection('sessions')
-        .where({ device_id: this._deviceId })
+        .where({ device_id: this._deviceId, status: 'calibrating' })
         .orderBy('started_at', 'desc')
         .limit(1)
         .get();
 
-      logger.log('[calibrate] poll: found', res.data ? res.data.length : 0, 'sessions');
+      logger.log('[calibrate] poll: found', res.data ? res.data.length : 0, 'calibrating sessions');
 
       if (res.data && res.data.length > 0) {
-        const session = res.data[0];
-        logger.log('[calibrate] poll session.calibration:', JSON.stringify(session.calibration));
+        session = res.data[0];
+      } else {
+        const res2 = await db.collection('sessions')
+          .where({ device_id: this._deviceId, status: 'completed' })
+          .orderBy('started_at', 'desc')
+          .limit(1)
+          .get();
+        if (res2.data && res2.data.length > 0) {
+          session = res2.data[0];
+          logger.log('[calibrate] poll: found completed session instead');
+        }
+      }
 
-        // 检查是否有校准数据
+      if (session) {
+        logger.log('[calibrate] poll session.calibration:', JSON.stringify(session.calibration));
+        logger.log('[calibrate] session started_at:', session.started_at, 'calibStartTs:', this._calibStartTs);
+
         if (session.calibration) {
           const { relax_rms, relax_mdf, active_rms, active_mdf, end_mdf } = session.calibration;
 
@@ -336,8 +388,11 @@ Page({
             'this.relaxRms=' + this.data.relaxRms,
             'this.activeRms=' + this.data.activeRms);
 
-          // relax 完成但 active 未完成 → 提示用户开始用力
-          if (relax_rms !== undefined && relax_rms > 0 && !active_rms && !this.data.relaxRms) {
+          const isNewSession = session.started_at >= this._calibStartTs - 5000;
+
+          if (isNewSession && relax_rms !== undefined && relax_rms > 0 && !active_rms && !this.data.relaxRms) {
+            this._clearPhaseTimeout();
+            this._commandSent = false;
             this.setData({
               relaxRms: relax_rms,
               relaxMdf: relax_mdf || 0,
@@ -348,8 +403,9 @@ Page({
             return;
           }
 
-          // active 也完成了 → 显示结果
-          if (active_rms !== undefined && active_rms > 0 && !this.data.activeRms) {
+          if (isNewSession && active_rms !== undefined && active_rms > 0 && !this.data.activeRms) {
+            this._clearPhaseTimeout();
+            this._commandSent = false;
             this.setData({
               activeRms: active_rms,
               activeMdf: active_mdf || 0,
@@ -388,6 +444,8 @@ Page({
   // ==================== 重置 ====================
   _resetAll() {
     this._stopPolling();
+    this._clearPhaseTimeout();
+    this._commandSent = false;
     this.setData({
       phase: 'idle',
       statusText: '点击下方按钮开始校准',
@@ -397,6 +455,11 @@ Page({
       liveRelaxMdf: null,
       liveActiveRms: null,
       liveActiveMdf: null,
+      relaxRms: null,
+      relaxMdf: null,
+      activeRms: null,
+      activeMdf: null,
+      endMdf: null,
     });
   },
 

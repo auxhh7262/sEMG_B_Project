@@ -23,10 +23,16 @@ NetManager::NetManager()
     , _wifiDisconnectedSince(0)
     , _bleOpened(false)
     , _provisioningActive(false)
+    , _timeSynced(false)
+    , _ntpBaseSec(0)
+    , _ntpBaseMs(0)
+    , _ntpPending(false)
+    , _ntpRequestTime(0)
 {
     memset(_deviceId, 0, sizeof(_deviceId));
     memset(_sessionId, 0, sizeof(_sessionId));
     memset(_lastCommandId, 0, sizeof(_lastCommandId));
+    memset(_ntpPacketBuffer, 0, sizeof(_ntpPacketBuffer));
 }
 
 void NetManager::_genDeviceId(char* buf, size_t len) {
@@ -111,12 +117,88 @@ bool NetManager::initBlocking(uint32_t wifiTimeoutMs) {
     LOG("[NET] Waiting 2s for network to stabilize...\n");
     delay(2000);
 
+    // NTP 时间同步（后台异步，北京时间）
+    LOG("[NET] Starting NTP sync (background)...\n");
+    _ntpUdp.begin(8889);
+    syncNtpTime();
+
     // 跳过注册，直接开始会话
     LOG("[NET] Session started: %s\n", _sessionId);
     _sessionActive = true;
     _lastIngestMs = millis();
     LOG("[NET] Skipping registration, session active.\n");
     return true;
+}
+
+// ==================== NTP 时间同步 ====================
+#define NTP_PACKET_SIZE 48
+#define NTP_SERVER_IP  203, 107, 6, 88  // ntp.aliyun.com 固定IP，避免DNS查询导致hardfault
+#define NTP_PORT 123
+#define TIMEZONE_OFFSET (8 * 3600)  // 北京时间 UTC+8
+
+void NetManager::syncNtpTime() {
+    if (!_wifiConnected) return;
+
+    IPAddress ntpIp(NTP_SERVER_IP);
+    _ntpPending = true;
+    _ntpRequestTime = millis();
+    memset(_ntpPacketBuffer, 0, NTP_PACKET_SIZE);
+    _ntpPacketBuffer[0] = 0b11100011;
+    _ntpUdp.beginPacket(ntpIp, NTP_PORT);
+    _ntpUdp.write(_ntpPacketBuffer, NTP_PACKET_SIZE);
+    _ntpUdp.endPacket();
+    LOG("[NTP] Request sent to 203.107.6.88\n");
+}
+
+void NetManager::_handleNtp() {
+    int packetSize = _ntpUdp.parsePacket();
+    if (packetSize >= NTP_PACKET_SIZE) {
+        _ntpUdp.read(_ntpPacketBuffer, NTP_PACKET_SIZE);
+        unsigned long highWord = word(_ntpPacketBuffer[40], _ntpPacketBuffer[41]);
+        unsigned long lowWord = word(_ntpPacketBuffer[42], _ntpPacketBuffer[43]);
+        unsigned long secsSince1900 = highWord << 16 | lowWord;
+        const unsigned long seventyYears = 2208988800UL;
+        _ntpBaseSec = secsSince1900 - seventyYears + TIMEZONE_OFFSET;
+        _ntpBaseMs = millis();
+        _timeSynced = true;
+        _ntpPending = false;
+
+        char timeBuf[32];
+        getTimeString(timeBuf, sizeof(timeBuf));
+        LOG("[NTP] Sync OK: %s\n", timeBuf);
+    }
+
+    if (_ntpPending && (millis() - _ntpRequestTime > 5000)) {
+        _ntpPending = false;
+        LOG("[NTP] Sync timeout, will retry in 60s\n");
+        _ntpRequestTime = millis();
+    }
+    if (!_timeSynced && !_ntpPending && (millis() - _ntpRequestTime > 60000)) {
+        syncNtpTime();
+    }
+}
+
+uint32_t NetManager::getCurrentTimeSec() {
+    if (!_timeSynced) return 0;
+    uint32_t elapsed = (millis() - _ntpBaseMs) / 1000;
+    return _ntpBaseSec + elapsed;
+}
+
+void NetManager::getTimeString(char* buf, size_t len) {
+    if (!_timeSynced || buf == nullptr || len < 13) {
+        if (buf && len > 0) buf[0] = '\0';
+        return;
+    }
+
+    uint32_t epoch = getCurrentTimeSec();
+    uint32_t msPart = (millis() - _ntpBaseMs) % 1000;
+
+    uint32_t seconds = epoch % 86400;
+    uint8_t h = seconds / 3600;
+    uint8_t m = (seconds % 3600) / 60;
+    uint8_t s = seconds % 60;
+
+    snprintf(buf, len, "%02u:%02u:%02u.%03u", h, m, s, (unsigned)msPart);
 }
 
 void NetManager::_wifiTick() {
@@ -227,12 +309,10 @@ void NetManager::_checkIngest() {
     }
     snprintf(_jsonBuf + pos, sizeof(_jsonBuf) - pos, "]}");
 
-    LOG("[NET] Uploading %d frames...\n", _batchCount);
     bool ok = _httpPost(CLOUD_URL_DATA_INGEST, _jsonBuf);
 
     if (ok) {
         uint8_t uploadedFrames = _batchCount;
-        LOG("[NET] Upload OK (%d frames)\n", uploadedFrames);
         _batchCount = 0;
         _lastIngestMs = now;
 
@@ -315,7 +395,6 @@ bool NetManager::_httpPost(const char* url, const char* jsonBody, String* outBod
             client.stop();
             continue;
         }
-        LOG("[NET] TCP connected in %lums\n", (unsigned long)(millis() - tConn));
 
         // 发送请求头
         size_t written = client.write((const uint8_t*)reqHeader, hdrLen);
@@ -372,23 +451,20 @@ bool NetManager::_httpPost(const char* url, const char* jsonBody, String* outBod
             continue;
         }
 
-        // 只打印 status line (第一行)
-        int firstNL = header.indexOf('\n');
-        if (firstNL > 0) {
-            String statusLine = header.substring(0, firstNL);
-            statusLine.trim();
-            LOG("[NET] %s\n", statusLine.c_str());
-        }
-
-        if (respBody.length() > 0 && respBody.length() < 300) {
-            LOG("[NET] Body: %s\n", respBody.c_str());
-        }
-
         if (outBody) *outBody = respBody;
 
         bool ok = (header.indexOf("200") > 0) || (header.indexOf("201") > 0);
         if (!ok) {
             LOG("[NET] HTTP error (attempt %d)\n", attempt + 1);
+            int firstNL = header.indexOf('\n');
+            if (firstNL > 0) {
+                String statusLine = header.substring(0, firstNL);
+                statusLine.trim();
+                LOG("[NET] %s\n", statusLine.c_str());
+            }
+            if (respBody.length() > 0 && respBody.length() < 300) {
+                LOG("[NET] Body: %s\n", respBody.c_str());
+            }
         }
         return ok;
     }
@@ -421,7 +497,8 @@ void NetManager::uploadCalibPhase(const char* phase, float rms, float mdf,
             _deviceId, phase, rms, mdf);
     }
     LOG("[NET] Uploading calib phase %s: rms=%.3f mdf=%.1f\n", phase, rms, mdf);
-    _httpPost(CLOUD_URL_UPLOAD_CALIB, json);
+    bool ok = _httpPost(CLOUD_URL_UPLOAD_CALIB, json);
+    LOG("[NET] Calib phase %s upload: %s\n", phase, ok ? "OK" : "FAIL");
 }
 
 void NetManager::updateSavedCredentials(const char* ssid, const char* pass) {
@@ -434,6 +511,7 @@ void NetManager::updateSavedCredentials(const char* ssid, const char* pass) {
 
 void NetManager::tick() {
     _wifiTick();
+    _handleNtp();
     _checkIngest();
 
     uint32_t now = millis();

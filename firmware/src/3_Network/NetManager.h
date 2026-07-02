@@ -3,6 +3,7 @@
 
 #include <Arduino.h>
 #include <WiFiS3.h>
+#include <WiFiUdp.h>
 
 
 #define CLOUD_BASE_DOMAIN "cloud1-d4gqmimmo05b12c94-1446329561.ap-shanghai.app.tcloudbase.com"
@@ -38,6 +39,11 @@ public:
     bool isWifiConnected() const { return _wifiConnected; }
     const char* getDeviceId() const { return _deviceId; }
 
+    void syncNtpTime();
+    bool isTimeSynced() const { return _timeSynced; }
+    uint32_t getCurrentTimeSec();
+    void getTimeString(char* buf, size_t len);
+
     void updateSavedCredentials(const char* ssid, const char* pass);
     void pauseWifiRetry()   { _provisioningActive = true; }
     void resumeWifiRetry()  { _provisioningActive = false; }
@@ -60,6 +66,14 @@ private:
 
     bool _wifiConnected;
     uint32_t _wifiRetryTimer;
+
+    WiFiUDP _ntpUdp;
+    bool _timeSynced;
+    uint32_t _ntpBaseSec;
+    uint32_t _ntpBaseMs;
+    bool _ntpPending;
+    uint32_t _ntpRequestTime;
+    byte _ntpPacketBuffer[48];
 
     struct DataPoint {
         float rms, act, mdf, fatigue;
@@ -93,6 +107,7 @@ private:
     void _executeCommand(const char* command, const char* paramsJson);
     void _reportStatus();
     void _ackCommand(const char* commandId);
+    void _handleNtp();
 
     void (*_onResetWifi)();
     void (*_onWifiLostTimeout)();

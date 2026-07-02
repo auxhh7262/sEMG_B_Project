@@ -272,10 +272,10 @@ void loop() {
     // 5. 业务调度
     gAppController.tick();
 
-    // 6. 心跳日志 (10s)
+    // 6. 心跳日志 (60s)
     static uint32_t _hbTimer = 0;
     static uint32_t _hbCount = 0;
-    if (millis() - _hbTimer > 10000) {
+    if (millis() - _hbTimer > 60000) {
         _hbTimer = millis();
         _hbCount++;
         LOG("[HB] #%lu alive, ADC_cb=%lu, WiFi=%d, prov=%d, buf=%u\n",

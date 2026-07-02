@@ -38,51 +38,55 @@ exports.main = async (event, context) => {
       .limit(1)
       .get();
 
-    if (data.length > 0) {
-      // 更新已有 session
-      const session = data[0];
-      const updateData = {
-        updated_at: now,
-      };
-      if (phase === 'relax' && relax_rms !== undefined) {
-        updateData.calibration = {
-          ...session.calibration,
-          relax_rms, relax_mdf,
-        };
+    if (phase === 'relax' && relax_rms !== undefined) {
+      // relax 阶段：总是创建新 session，同时把旧的 calibrating session 标记为 cancelled
+      if (data.length > 0) {
+        await coll.doc(data[0]._id).update({
+          data: { status: 'cancelled', updated_at: now }
+        });
+        console.log('[uploadCalibration] cancelled old session', data[0]._id);
       }
-      if (phase === 'active' && active_rms !== undefined) {
-        updateData.calibration = {
-          ...session.calibration,
-          active_rms, active_mdf, end_mdf: end_mdf || 0,
-        };
-        updateData.status = 'completed';
-        updateData.ended_at = now;
-      }
-      await coll.doc(session._id).update({ data: updateData });
-      console.log('[uploadCalibration] updated session', session._id, phase);
-    } else {
-      // 创建新 session
       const doc = {
         device_id,
-        status: phase === 'active' ? 'completed' : 'calibrating',
-        calibration: {},
+        status: 'calibrating',
+        calibration: { relax_rms, relax_mdf },
         started_at: now,
         updated_at: now,
       };
-      if (phase === 'relax') {
-        doc.calibration = { relax_rms, relax_mdf };
-      }
-      if (phase === 'active') {
-        doc.calibration = {
-          relax_rms: relax_rms || 0,
-          relax_mdf: relax_mdf || 0,
-          active_rms, active_mdf,
-          end_mdf: end_mdf || 0,
-        };
-        doc.ended_at = now;
-      }
       const res = await coll.add({ data: doc });
-      console.log('[uploadCalibration] created session', res._id, phase);
+      console.log('[uploadCalibration] created new session (relax)', res._id);
+
+    } else if (phase === 'active' && active_rms !== undefined) {
+      // active 阶段：更新最近的 calibrating session
+      if (data.length > 0) {
+        const session = data[0];
+        const updateData = {
+          updated_at: now,
+          calibration: {
+            ...session.calibration,
+            active_rms, active_mdf, end_mdf: end_mdf || 0,
+          },
+          status: 'completed',
+          ended_at: now,
+        };
+        await coll.doc(session._id).update({ data: updateData });
+        console.log('[uploadCalibration] updated session (active)', session._id);
+      } else {
+        // 没有找到 calibrating session，直接创建 completed session
+        const doc = {
+          device_id,
+          status: 'completed',
+          calibration: {
+            relax_rms: 0, relax_mdf: 0,
+            active_rms, active_mdf, end_mdf: end_mdf || 0,
+          },
+          started_at: now,
+          updated_at: now,
+          ended_at: now,
+        };
+        const res = await coll.add({ data: doc });
+        console.log('[uploadCalibration] created session (active-only)', res._id);
+      }
     }
 
     return { code: 0, msg: 'ok' };

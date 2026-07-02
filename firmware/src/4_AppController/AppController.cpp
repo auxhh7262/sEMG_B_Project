@@ -97,13 +97,20 @@ void AppController::tick(void)
         else if (_calibPhase == CALIB_ACTIVE) phaseTag = " [CALIB:ACTIVE]";
 
         static uint16_t _dataLogCounter = 0;
-        if (++_dataLogCounter >= 60) {
+        uint16_t logInterval = (_calibPhase == CALIB_RELAX || _calibPhase == CALIB_ACTIVE) ? 10 : 60;
+        if (++_dataLogCounter >= logInterval) {
             _dataLogCounter = 0;
-            uint32_t ts = millis();
-            unsigned int s = ts / 1000, ms = ts % 1000;
-            unsigned int mm = (s / 60) % 60, ss = s % 60;
-            LOG("[DATA]%s %02u:%02u.%03u rms=%.3f act=%.1f%% mdf=%.1f fatigue=%.1f%% q=%u\n",
-                phaseTag, mm, ss, ms, rms, activation, mdf, fatigue, quality);
+            char timeBuf[32];
+            if (_netMgr && _netMgr->isTimeSynced()) {
+                _netMgr->getTimeString(timeBuf, sizeof(timeBuf));
+            } else {
+                uint32_t ts = millis();
+                unsigned int s = ts / 1000, ms = ts % 1000;
+                unsigned int hh = s / 3600, mm = (s / 60) % 60, ss = s % 60;
+                snprintf(timeBuf, sizeof(timeBuf), "%02u:%02u:%02u.%03u", hh, mm, ss, (unsigned)ms);
+            }
+            LOG("[DATA]%s %s rms=%.3f act=%.1f%% mdf=%.1f fatigue=%.1f%% q=%u\n",
+                phaseTag, timeBuf, rms, activation, mdf, fatigue, quality);
         }
     }
 

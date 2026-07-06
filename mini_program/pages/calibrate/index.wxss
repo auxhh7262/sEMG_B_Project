@@ -119,22 +119,58 @@ page { height: auto !important; min-height: 100vh; background-color: #0d0d0d !im
 .transition-sub { font-size: 13px; color: #888; }
 
 /* ================= 结果汇总 ================= */
-.result-summary {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+.phase-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #fff;
+  margin-bottom: 8px;
+}
+.result-rows {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
   gap: 10px;
   margin: 12px 0;
 }
-.result-item {
-  background: #252525;
+.result-row {
+  background: #1a1a1a;
+  border: 1px solid #333;
   border-radius: 8px;
-  padding: 12px;
+  padding: 10px 14px;
+}
+.result-row-label {
+  display: block;
+  font-size: 13px;
+  color: #60a5fa;
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+.result-row-values {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+.result-cell {
+  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
+  background: #252525;
+  border-radius: 6px;
+  padding: 8px 4px;
 }
-.result-label { font-size: 12px; color: #888; margin-bottom: 4px; }
-.result-value { font-size: 18px; font-weight: bold; color: #07c160; font-family: monospace; }
+.cell-label {
+  font-size: 10px;
+  color: #888;
+  margin-bottom: 4px;
+  white-space: nowrap;
+}
+.cell-value {
+  font-size: 16px;
+  font-weight: bold;
+  color: #07c160;
+  font-family: monospace;
+}
 
 /* ================= 验证结果 ================= */
 .validation-result {

@@ -39,6 +39,8 @@ Page({
   _phaseTimeout: null,
   _phaseStartTs: 0,
   _calibStartTs: 0,
+  _dataWatcher: null,
+  _watchStarting: false,
 
   onLoad() {
     logger.log('[calibrate] onLoad');
@@ -55,10 +57,57 @@ Page({
 
   onHide() {
     this._stopPolling();
+    this._stopDataWatch();
   },
 
   onUnload() {
     this._stopPolling();
+    this._stopDataWatch();
+  },
+
+  // ==================== 实时数据 Watch ====================
+  _startDataWatch() {
+    if (this._dataWatcher || this._watchStarting) return;
+    if (!wx.cloud) return;
+    this._watchStarting = true;
+
+    const db = wx.cloud.database({ env: CLOUD_ENV });
+    this._dataWatcher = db.collection('data_points')
+      .orderBy('timestamp', 'desc')
+      .limit(1)
+      .watch({
+        onChange: (snapshot) => {
+          const docs = snapshot.docs;
+          if (docs && docs.length > 0) {
+            const pt = docs[0];
+            const { phase } = this.data;
+            if (phase === 'relax') {
+              this.setData({
+                liveRelaxRms: pt.rms ? (pt.rms / 1000).toFixed(3) : null,
+                liveRelaxMdf: pt.mdf ? (pt.mdf / 10).toFixed(1) : null,
+              });
+            } else if (phase === 'active_contract') {
+              this.setData({
+                liveActiveRms: pt.rms ? (pt.rms / 1000).toFixed(3) : null,
+                liveActiveMdf: pt.mdf ? (pt.mdf / 10).toFixed(1) : null,
+              });
+            }
+          }
+        },
+        onError: (e) => {
+          logger.warn('[calibrate] data watch error:', e);
+        },
+      });
+
+    this._watchStarting = false;
+  },
+
+  _stopDataWatch() {
+    if (this._dataWatcher) {
+      this._dataWatcher.close();
+      this._dataWatcher = null;
+    }
+    this._watchStarting = false;
   },
 
   // ==================== 初始化 ====================
@@ -205,6 +254,7 @@ Page({
     }
 
     this._setPhaseTimeout(20, '放松校准超时，请重试');
+    this._startDataWatch();
     this._startPolling();
   },
 
@@ -234,6 +284,7 @@ Page({
     }
 
     this._setPhaseTimeout(30, '主动收缩校准超时，请重试');
+    this._startDataWatch();
     this._startPolling();
   },
 
@@ -337,6 +388,7 @@ Page({
     this._phaseTimeout = setTimeout(() => {
       logger.warn('[calibrate] phase timeout after', seconds, 's');
       this._stopPolling();
+      this._stopDataWatch();
       this._commandSent = false;
       this.setData({
         phase: 'idle',
@@ -393,6 +445,7 @@ Page({
           if (isNewSession && relax_rms !== undefined && relax_rms > 0 && !active_rms && !this.data.relaxRms) {
             this._clearPhaseTimeout();
             this._commandSent = false;
+            this._stopDataWatch();
             this.setData({
               relaxRms: relax_rms,
               relaxMdf: relax_mdf || 0,
@@ -406,6 +459,7 @@ Page({
           if (isNewSession && active_rms !== undefined && active_rms > 0 && !this.data.activeRms) {
             this._clearPhaseTimeout();
             this._commandSent = false;
+            this._stopDataWatch();
             this.setData({
               activeRms: active_rms,
               activeMdf: active_mdf || 0,
@@ -444,6 +498,7 @@ Page({
   // ==================== 重置 ====================
   _resetAll() {
     this._stopPolling();
+    this._stopDataWatch();
     this._clearPhaseTimeout();
     this._commandSent = false;
     this.setData({

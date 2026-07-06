@@ -74,7 +74,7 @@ module.exports.val = val;
   <block wx:if="{{phase === 'relax'}}">
     <view class="status-area">
       <view class="hint-box">
-        <text class="hint-phase">静息态采集（10秒）</text>
+        <text class="hint-phase">静息态采集（约10秒）</text>
         <text class="hint-text">请保持放松，不要用力</text>
       </view>
       <view class="live-values">
@@ -87,7 +87,6 @@ module.exports.val = val;
           <text class="live-value">{{fmt.val(liveRelaxMdf, 'Hz')}}</text>
         </view>
       </view>
-      <text class="status-text">{{statusText}}</text>
     </view>
   </block>
 
@@ -97,10 +96,9 @@ module.exports.val = val;
       <view class="phase-transition">
         <text class="transition-icon">✓</text>
         <text class="transition-title">第一阶段完成</text>
-        <text class="transition-sub">静息态数据采集完毕，请准备进入第二阶段</text>
+        <text class="transition-sub">静息态采集完毕，请握紧拳头至最大力，准备好后点击下方按钮进入第二阶段</text>
       </view>
       <button class="btn btn-primary btn-max-start" bindtap="onStartActive">开始第二阶段</button>
-      <text class="status-text">{{statusText}}</text>
     </view>
   </block>
 
@@ -108,7 +106,7 @@ module.exports.val = val;
   <block wx:if="{{phase === 'active_contract'}}">
     <view class="status-area">
       <view class="hint-box">
-        <text class="hint-phase">最大收缩（15秒）</text>
+        <text class="hint-phase">最大收缩（约15秒）</text>
         <text class="hint-text">请握紧拳头至最大力，并保持</text>
         <text class="hint-text red">持续握紧拳头至最大力！</text>
       </view>
@@ -122,7 +120,6 @@ module.exports.val = val;
           <text class="live-value">{{fmt.val(liveActiveMdf, 'Hz')}}</text>
         </view>
       </view>
-      <text class="status-text">{{statusText}}</text>
     </view>
   </block>
 
@@ -130,26 +127,37 @@ module.exports.val = val;
   <block wx:if="{{phase === 'result'}}">
     <view class="status-area">
       <text class="phase-title">校准结果</text>
-      <view class="result-summary">
-        <view class="result-item">
-          <text class="result-label">静息态 RMS</text>
-          <text class="result-value">{{fmt.val(relaxRms, 'mV')}}</text>
+
+      <view class="result-rows">
+        <view class="result-row">
+          <text class="result-row-label">静息态</text>
+          <view class="result-row-values">
+            <view class="result-cell">
+              <text class="cell-label">RMS(mV)</text>
+              <text class="cell-value">{{fmt.val(relaxRms, 'mV')}}</text>
+            </view>
+            <view class="result-cell">
+              <text class="cell-label">MDF(Hz)</text>
+              <text class="cell-value">{{fmt.val(relaxMdf, 'Hz')}}</text>
+            </view>
+          </view>
         </view>
-        <view class="result-item">
-          <text class="result-label">最大收缩 RMS</text>
-          <text class="result-value">{{fmt.val(activeRms, 'mV')}}</text>
-        </view>
-        <view class="result-item">
-          <text class="result-label">静息态 MDF</text>
-          <text class="result-value">{{fmt.val(relaxMdf, 'Hz')}}</text>
-        </view>
-        <view class="result-item">
-          <text class="result-label">峰值 MDF</text>
-          <text class="result-value">{{fmt.val(activeMdf, 'Hz')}}</text>
-        </view>
-        <view class="result-item">
-          <text class="result-label">末尾 MDF</text>
-          <text class="result-value">{{fmt.val(endMdf, 'Hz')}}</text>
+        <view class="result-row">
+          <text class="result-row-label">最大收缩</text>
+          <view class="result-row-values">
+            <view class="result-cell">
+              <text class="cell-label">RMS(mV)</text>
+              <text class="cell-value">{{fmt.val(activeRms, 'mV')}}</text>
+            </view>
+            <view class="result-cell">
+              <text class="cell-label">峰值MDF(Hz)</text>
+              <text class="cell-value">{{fmt.val(activeMdf, 'Hz')}}</text>
+            </view>
+            <view class="result-cell">
+              <text class="cell-label">末尾MDF(Hz)</text>
+              <text class="cell-value">{{fmt.val(endMdf, 'Hz')}}</text>
+            </view>
+          </view>
         </view>
       </view>
 

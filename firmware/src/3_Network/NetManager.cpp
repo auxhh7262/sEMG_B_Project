@@ -34,10 +34,12 @@ NetManager::NetManager()
     , _ntpBaseMs(0)
     , _ntpPending(false)
     , _ntpRequestTime(0)
+    , _ntpRetryCount(0)
 {
     memset(_deviceId, 0, sizeof(_deviceId));
     memset(_sessionId, 0, sizeof(_sessionId));
     memset(_lastCommandId, 0, sizeof(_lastCommandId));
+    memset(_lastParams, 0, sizeof(_lastParams));
     memset(_ntpPacketBuffer, 0, sizeof(_ntpPacketBuffer));
 }
 
@@ -123,17 +125,46 @@ bool NetManager::initBlocking(uint32_t wifiTimeoutMs) {
     LOG("[NET] Waiting 2s for network to stabilize...\n");
     delay(2000);
 
-    // NTP 时间同步（后台异步，北京时间）
-    LOG("[NET] Starting NTP sync (background)...\n");
+    // NTP 时间同步（阻塞等待，北京时间）
+    LOG("[NET] Starting NTP sync (blocking)...\n");
     _ntpUdp.begin(8889);
+    syncNtpBlocking(20000);
+
+    return true;
+}
+
+// ==================== NTP 阻塞同步 ====================
+bool NetManager::syncNtpBlocking(uint32_t timeoutMs) {
+    uint32_t startMs = millis();
     syncNtpTime();
 
-    // 跳过注册，直接开始会话
-    LOG("[NET] Session started: %s\n", _sessionId);
+    while (!_timeSynced && (millis() - startMs < timeoutMs)) {
+        _handleNtp();
+        delay(10);
+    }
+
+    if (_timeSynced) {
+        LOG("[NTP] Blocking sync success\n");
+        return true;
+    } else {
+        LOG("[NTP] Blocking sync FAILED after %lums, will retry in background\n",
+            (unsigned long)(millis() - startMs));
+        _ntpPending = false;
+        _ntpRequestTime = millis();  // 让后台重试逻辑接管
+        return false;
+    }
+}
+
+// ==================== 启动会话 ====================
+void NetManager::startSession() {
+    // 使用 NTP 时间生成 sessionId（毫秒级，避免同一秒重启冲突）
+    uint32_t tsSec = getCurrentTimeSec();
+    uint16_t tsMs = getCurrentTimeMs();
+    snprintf(_sessionId, sizeof(_sessionId), "%s_%lu%03u", _deviceId, tsSec, tsMs);
+
     _sessionActive = true;
     _lastIngestMs = millis();
-    LOG("[NET] Skipping registration, session active.\n");
-    return true;
+    LOG("[NET] Session started: %s\n", _sessionId);
 }
 
 // ==================== NTP 时间同步 ====================
@@ -168,6 +199,7 @@ void NetManager::_handleNtp() {
         _ntpBaseMs = millis();
         _timeSynced = true;
         _ntpPending = false;
+        _ntpRetryCount = 0;
 
         char timeBuf[32];
         getTimeString(timeBuf, sizeof(timeBuf));
@@ -176,10 +208,14 @@ void NetManager::_handleNtp() {
 
     if (_ntpPending && (millis() - _ntpRequestTime > 5000)) {
         _ntpPending = false;
-        LOG("[NTP] Sync timeout, will retry in 60s\n");
+        _ntpRetryCount++;
+        // 前3次快速重试（5秒间隔），之后降为30秒
+        uint32_t retryInterval = (_ntpRetryCount <= 3) ? 5000 : 30000;
+        LOG("[NTP] Sync timeout (retry #%d), will retry in %lus\n",
+            _ntpRetryCount, retryInterval / 1000);
         _ntpRequestTime = millis();
     }
-    if (!_timeSynced && !_ntpPending && (millis() - _ntpRequestTime > 60000)) {
+    if (!_timeSynced && !_ntpPending && (millis() - _ntpRequestTime > (_ntpRetryCount <= 3 ? 5000 : 30000))) {
         syncNtpTime();
     }
 }
@@ -188,6 +224,11 @@ uint32_t NetManager::getCurrentTimeSec() {
     if (!_timeSynced) return 0;
     uint32_t elapsed = (millis() - _ntpBaseMs) / 1000;
     return _ntpBaseSec + elapsed;
+}
+
+uint16_t NetManager::getCurrentTimeMs() {
+    if (!_timeSynced) return 0;
+    return (uint16_t)((millis() - _ntpBaseMs) % 1000);
 }
 
 void NetManager::getTimeString(char* buf, size_t len) {
@@ -267,15 +308,20 @@ void NetManager::_wifiTick() {
 // 记录NTP时间戳（0表示未同步），云端fallback到服务器时间
 bool NetManager::pushDataPoint(float rms, float act,
                                 float mdf, float fatigue, uint8_t quality) {
-    uint32_t tsSec = getCurrentTimeSec();  // NTP同步的Unix秒数，未同步时为0
-    uint16_t ms = _timeSynced ? (uint16_t)((millis() - _ntpBaseMs) % 1000) : 0;
+    // NTP未同步时跳过上传，避免时间戳为0的脏数据
+    if (!_timeSynced) {
+        return false;
+    }
+
+    uint32_t tsSec = getCurrentTimeSec();
+    uint16_t ms = (uint16_t)((millis() - _ntpBaseMs) % 1000);
 
     // ===== 分钟统计累计 =====
     _updateMinuteStats(rms, mdf, fatigue, quality);
 
     // ===== 分钟边界检测 =====
     // 每60秒触发一次分钟统计上传
-    if (_timeSynced && tsSec > 0) {
+    if (tsSec > 0) {
         uint32_t currentMinute = tsSec / 60;
         uint32_t startMinute = _minuteStartSec / 60;
         if (_minuteStartSec > 0 && currentMinute > startMinute && _minuteCount > 0) {
@@ -546,6 +592,12 @@ void NetManager::updateSavedCredentials(const char* ssid, const char* pass) {
 void NetManager::tick() {
     _wifiTick();
     _handleNtp();
+
+    // NTP后台同步成功后自动启动会话（处理阻塞同步失败的情况）
+    if (_timeSynced && !_sessionActive && _wifiConnected) {
+        startSession();
+    }
+
     _checkIngest();
 
     uint32_t now = millis();
@@ -602,7 +654,22 @@ void NetManager::_checkCommand() {
     if (strlen(cmdId) > 0) {
         strncpy(_lastCommandId, cmdId, sizeof(_lastCommandId) - 1);
     }
-    _executeCommand(cmdName, "");
+
+    // 解析 params 字段
+    _lastParams[0] = '\0';
+    int paramsIdx = respBody.indexOf("\"params\":");
+    if (paramsIdx > 0) {
+        int braceStart = respBody.indexOf('{', paramsIdx);
+        if (braceStart > 0) {
+            int braceEnd = respBody.indexOf('}', braceStart);
+            if (braceEnd > braceStart) {
+                String paramsStr = respBody.substring(braceStart, braceEnd + 1);
+                strncpy(_lastParams, paramsStr.c_str(), sizeof(_lastParams) - 1);
+            }
+        }
+    }
+
+    _executeCommand(cmdName, _lastParams);
 }
 
 void NetManager::_executeCommand(const char* command, const char* paramsJson) {
@@ -631,9 +698,9 @@ void NetManager::_executeCommand(const char* command, const char* paramsJson) {
         }
     }
     else if (strcmp(command, "save_calib") == 0) {
-        LOG("[NET] Executing save_calib via callback\n");
+        LOG("[NET] Executing save_calib via callback, params=%s\n", paramsJson);
         if (_onSaveCalib) {
-            _onSaveCalib();
+            _onSaveCalib(paramsJson);
         }
     }
     else {

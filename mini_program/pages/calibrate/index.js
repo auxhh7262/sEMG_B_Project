@@ -10,6 +10,7 @@ Page({
     currentUser: null,
     userMetaStr: '',
     showUserForm: false,
+    formData: { name: '', age: '', gender: '1', handedness: '2' },
 
     // 实时显示（校准过程中）
     liveRelaxRms: null,
@@ -204,7 +205,7 @@ Page({
         confirmText: '去填写',
         success: (res) => {
           if (res.confirm) {
-            this.setData({ showUserForm: true });
+            this.onShowUserForm();
           }
         },
       });
@@ -520,7 +521,16 @@ Page({
 
   // ==================== 用户表单 ====================
   onShowUserForm() {
-    this.setData({ showUserForm: true });
+    const user = storage.getCurrentUser() || {};
+    this.setData({
+      showUserForm: true,
+      formData: {
+        name: user.name || '',
+        age: user.age ? String(user.age) : '',
+        gender: user.gender ? String(user.gender) : '1',
+        handedness: user.handedness ? String(user.handedness) : '2',
+      },
+    });
   },
 
   onHideUserForm() {
@@ -556,7 +566,7 @@ Page({
 
     this.setData({
       currentUser: user,
-      userMetaStr: `${name} | ${age}岁 | ${gender === 1 ? '男' : '女'} | ${handedness === 1 ? '左手腕' : '右手腕'}`,
+      userMetaStr: `${name} | ${age}岁 | ${user.gender === 1 ? '男' : '女'} | ${user.handedness === 1 ? '左手腕' : '右手腕'}`,
       showUserForm: false,
     });
 

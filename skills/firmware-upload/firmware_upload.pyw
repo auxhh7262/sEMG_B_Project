@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """
 sEMG Firmware Upload Tool (All-in-One)
 Usage:
@@ -215,6 +215,7 @@ def gui_mode():
     
     def read_serial():
         nonlocal ser, monitoring
+        line_buf = ''  # 行缓冲区，跨read调用组装完整行
         while monitoring:
             try:
                 if ser is None:
@@ -229,7 +230,7 @@ def gui_mode():
                         append(f'Cannot open {PORT}: {e}', 'ERROR')
                         time.sleep(2)
                         continue
-    
+
                 if ser.in_waiting > 0:
                     data = ser.read(ser.in_waiting)
                     try:
@@ -237,9 +238,14 @@ def gui_mode():
                     except:
                         text = data.decode('latin-1', errors='replace')
                     text = text.replace('\r', '')
-                    for line in text.split('\n'):
+                    line_buf += text
+                    while '\n' in line_buf:
+                        line, line_buf = line_buf.split('\n', 1)
                         line = line.strip()
                         if line:
+                            # 过滤bootloader二进制数据：跳过含非ASCII字符的行
+                            if any(ord(c) > 127 for c in line):
+                                continue
                             tag = detect_tag(line)
                             append(line, tag)
                 else:

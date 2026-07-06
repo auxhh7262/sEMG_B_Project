@@ -19,9 +19,9 @@ void AppController::init(void)
 {
     PersonalCalibData_t calib = {0};
     if (_storageMgr->GetPersonalCalib(&calib) && calib.calib_timestamp_sec > 0) {
+        LOG("[CTRL] Boot: loaded calib relax_mdf=%.1f\n", calib.relax_mdf_hz);
         _signalProc->setCalibration(calib.relax_rms_mv, calib.active_rms_mv, calib.relax_mdf_hz);
         _signalProc->setRelaxBaseline(calib.relax_rms_mv, calib.relax_mdf_hz);
-        LOG("[CTRL] Boot: loaded calib relax_mdf=%.1f\n", calib.relax_mdf_hz);
     } else {
         LOG("[CTRL] Boot: no calib in EEPROM\n");
     }
@@ -224,9 +224,8 @@ void AppController::handleSaveCalib(int userScore,
     pcData.relax_mdf_hz = _calibRelaxMdf;
     pcData.active_mdf_hz = _calibActiveMdf;
     pcData.end_mdf_hz = _calibEndMdf;
-    uint32_t nowMs = millis();
-    pcData.calib_timestamp_sec = nowMs / 1000;
-    pcData.calib_timestamp_ms = (uint16_t)(nowMs % 1000);
+    pcData.calib_timestamp_sec = _netMgr->getCurrentTimeSec();
+    pcData.calib_timestamp_ms = _netMgr->getCurrentTimeMs();
     _storageMgr->UpdatePersonalCalib(&pcData);
     _signalProc->setCalibration(relax_rms, active_rms, _calibRelaxMdf);
 

@@ -74,9 +74,41 @@ static void _onCloudRecordActive() {
     gAppController.handleRecordActive();
 }
 
-static void _onCloudSaveCalib() {
-    LOG("[MAIN] Cloud save_calib command\n");
-    gAppController.handleSaveCalib(0);
+static void _onCloudSaveCalib(const char* params) {
+    LOG("[MAIN] Cloud save_calib command, params=%s\n", params ? params : "(null)");
+
+    char name[32] = {0};
+    int age = 0, gender = 0, handedness = 0;
+
+    if (params && params[0]) {
+        String p(params);
+        // 解析 name
+        int nameIdx = p.indexOf("\"name\":\"");
+        if (nameIdx >= 0) {
+            int start = nameIdx + 8;
+            int end = p.indexOf('"', start);
+            if (end > start) {
+                p.substring(start, end).toCharArray(name, sizeof(name));
+            }
+        }
+        // 解析 age
+        int ageIdx = p.indexOf("\"age\":");
+        if (ageIdx >= 0) {
+            age = p.substring(ageIdx + 6).toInt();
+        }
+        // 解析 gender
+        int genderIdx = p.indexOf("\"gender\":");
+        if (genderIdx >= 0) {
+            gender = p.substring(genderIdx + 9).toInt();
+        }
+        // 解析 handedness
+        int handIdx = p.indexOf("\"handedness\":");
+        if (handIdx >= 0) {
+            handedness = p.substring(handIdx + 13).toInt();
+        }
+    }
+
+    gAppController.handleSaveCalib(0, name[0] ? name : nullptr, age, gender, handedness);
 }
 
 // WiFi 凭证配网处理 — 非阻塞状态机
@@ -174,10 +206,7 @@ void setup() {
     gBleConfig.init();
 
     // 4. 网络初始化（WiFi 已配置则连接，否则后续进入配网模式）
-    bool netOk = gNetManager.initBlocking(45000);
-
-    // 设置 deviceId 到 BLE（配网时小程序读取）
-    gBleConfig.setDeviceId(gNetManager.getDeviceId());
+    bool netOk = gNetManager.initBlocking(15000);
 
     // 注册回调
     gNetManager.onResetWifi(_onCloudResetWifi);
@@ -188,9 +217,16 @@ void setup() {
     gNetManager.onSaveCalib(_onCloudSaveCalib);
 
     if (netOk) {
-        // WiFi 从 EEPROM/硬编码连接成功 → 关闭 BLE，正常运行
-        LOG("[MAIN] WiFi connected from EEPROM: %s\n", WiFi.SSID());
+        // 设置 deviceId 到 BLE
+        gBleConfig.setDeviceId(gNetManager.getDeviceId());
         gBleConfig.stopProvisioning();
+
+        // NTP同步成功后启动会话
+        if (gNetManager.isTimeSynced()) {
+            gNetManager.startSession();
+        } else {
+            LOG("[MAIN] WARNING: NTP not synced, session delayed\n");
+        }
     } else {
         // WiFi 未配置或连接失败 → 进入 BLE 配网模式
         LOG("[MAIN] No WiFi config, entering BLE provisioning...\n");

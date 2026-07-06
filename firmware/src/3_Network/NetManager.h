@@ -27,6 +27,8 @@ public:
     NetManager();
 
     bool initBlocking(uint32_t wifiTimeoutMs = 30000);
+    bool syncNtpBlocking(uint32_t timeoutMs = 20000);
+    void startSession();
     void tick();
     // 上传timestamp_sec（NTP同步的Unix秒数），云端转换为毫秒
     bool pushDataPoint(float rms, float act, float mdf,
@@ -43,6 +45,7 @@ public:
     void syncNtpTime();
     bool isTimeSynced() const { return _timeSynced; }
     uint32_t getCurrentTimeSec();
+    uint16_t getCurrentTimeMs();
     void getTimeString(char* buf, size_t len);
 
     void updateSavedCredentials(const char* ssid, const char* pass);
@@ -56,7 +59,7 @@ public:
     // 校准命令回调
     void onRecordRelax(void (*cb)()) { _onRecordRelax = cb; }
     void onRecordActive(void (*cb)()) { _onRecordActive = cb; }
-    void onSaveCalib(void (*cb)()) { _onSaveCalib = cb; }
+    void onSaveCalib(void (*cb)(const char* params)) { _onSaveCalib = cb; }
 
 private:
     void _wifiTick();
@@ -74,6 +77,7 @@ private:
     uint32_t _ntpBaseMs;
     bool _ntpPending;
     uint32_t _ntpRequestTime;
+    uint8_t _ntpRetryCount;
     byte _ntpPacketBuffer[48];
 
     struct DataPoint {
@@ -130,7 +134,8 @@ private:
     bool _provisioningActive;
     void (*_onRecordRelax)();
     void (*_onRecordActive)();
-    void (*_onSaveCalib)();
+    void (*_onSaveCalib)(const char* params);
+    char _lastParams[128];
     uint32_t _wifiDisconnectedSince;
 };
 

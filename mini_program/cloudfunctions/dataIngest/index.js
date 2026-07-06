@@ -5,8 +5,8 @@ const db = cloud.database();
 
 const BATCH_MAX = 100; // 单次最多写入 100 条
 
-// 字段顺序固定：[timestamp_sec, rms*1000, act*10, mdf*10, fatigue*10, quality]
-// timestamp_sec 是固件 NTP 同步后的 UTC 秒数
+// 字段顺序固定：[timestamp_sec, ms, rms, act, mdf, fatigue, quality]
+// 全部为真实物理值（rms:mV, act:%, mdf:Hz, fatigue:%），ms 为真实毫秒
 exports.main = async (event, context) => {
   console.log('[dataIngest] RAW event:', JSON.stringify(event));
 
@@ -38,13 +38,14 @@ exports.main = async (event, context) => {
     for (let i = 0; i < points.length; i += BATCH_MAX) {
       const batch = points.slice(i, i + BATCH_MAX);
       const batchDocs = batch.map((point, idx) => {
-        const [tsSec, rmsRaw, actRaw, mdfRaw, fatigueRaw, qualityRaw] = point;
+        const [tsSec, msRaw, rmsRaw, actRaw, mdfRaw, fatigueRaw, qualityRaw] = point;
 
         // timestamp: UTC 毫秒（供 orderBy 排序）
+        const ms = Number.isFinite(msRaw) ? Math.max(0, Math.min(999, Math.floor(msRaw))) : 0;
         let timestamp;
         if (tsSec > 1700000000) {
-          // 固件 NTP 时间戳有效（> 2023-11-14），每帧间隔约 100ms
-          timestamp = tsSec * 1000 + (i + idx) * 100;
+          // 固件 NTP 时间戳有效（> 2023-11-14），使用真实毫秒
+          timestamp = tsSec * 1000 + ms;
         } else {
           timestamp = serverNowMs + (i + idx) * 100;
         }
@@ -57,7 +58,6 @@ exports.main = async (event, context) => {
           const h = Math.floor(beijingSec / 3600) % 24;
           const m = Math.floor(beijingSec / 60) % 60;
           const s = beijingSec % 60;
-          const ms = (i + idx) * 100; // 帧偏移毫秒
           timeStr = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}.${String(ms).padStart(3,'0')}`;
         }
 

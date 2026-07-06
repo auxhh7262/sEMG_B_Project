@@ -76,7 +76,7 @@ static void _onCloudRecordActive() {
 
 static void _onCloudSaveCalib() {
     LOG("[MAIN] Cloud save_calib command\n");
-    gAppController.handleSaveCalib();
+    gAppController.handleSaveCalib(0);
 }
 
 // WiFi 凭证配网处理 — 非阻塞状态机

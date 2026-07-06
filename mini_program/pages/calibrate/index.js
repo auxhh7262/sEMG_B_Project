@@ -83,13 +83,13 @@ Page({
             const { phase } = this.data;
             if (phase === 'relax') {
               this.setData({
-                liveRelaxRms: pt.rms ? (pt.rms / 1000).toFixed(3) : null,
-                liveRelaxMdf: pt.mdf ? (pt.mdf / 10).toFixed(1) : null,
+                liveRelaxRms: pt.rms ? pt.rms.toFixed(3) : null,
+                liveRelaxMdf: pt.mdf ? pt.mdf.toFixed(1) : null,
               });
             } else if (phase === 'active_contract') {
               this.setData({
-                liveActiveRms: pt.rms ? (pt.rms / 1000).toFixed(3) : null,
-                liveActiveMdf: pt.mdf ? (pt.mdf / 10).toFixed(1) : null,
+                liveActiveRms: pt.rms ? pt.rms.toFixed(3) : null,
+                liveActiveMdf: pt.mdf ? pt.mdf.toFixed(1) : null,
               });
             }
           }

@@ -268,6 +268,7 @@ void NetManager::_wifiTick() {
 bool NetManager::pushDataPoint(float rms, float act,
                                 float mdf, float fatigue, uint8_t quality) {
     uint32_t tsSec = getCurrentTimeSec();  // NTP同步的Unix秒数，未同步时为0
+    uint16_t ms = _timeSynced ? (uint16_t)((millis() - _ntpBaseMs) % 1000) : 0;
 
     // ===== 分钟统计累计 =====
     _updateMinuteStats(rms, mdf, fatigue, quality);
@@ -290,6 +291,7 @@ bool NetManager::pushDataPoint(float rms, float act,
     if (_retryCount < INGEST_RETRY_QUEUE) {
         uint8_t idx = (_retryHead + _retryCount) % INGEST_RETRY_QUEUE;
         _retryQueue[idx].timestamp_sec = tsSec;
+        _retryQueue[idx].ms = ms;
         _retryQueue[idx].rms = rms;
         _retryQueue[idx].act = act;
         _retryQueue[idx].mdf = mdf;
@@ -300,6 +302,7 @@ bool NetManager::pushDataPoint(float rms, float act,
 
     if (_batchCount < INGEST_BATCH_FRAMES) {
         _batchBuffer[_batchCount].timestamp_sec = tsSec;
+        _batchBuffer[_batchCount].ms = ms;
         _batchBuffer[_batchCount].rms = rms;
         _batchBuffer[_batchCount].act = act;
         _batchBuffer[_batchCount].mdf = mdf;
@@ -327,14 +330,15 @@ void NetManager::_checkIngest() {
 
     for (uint8_t i = 0; i < _batchCount; i++) {
         if (i > 0) pos += snprintf(_jsonBuf + pos, sizeof(_jsonBuf) - pos, ",");
-        // 格式: [timestamp_sec, rms*1000, act*10, mdf*10, fatigue*10, quality]
+        // 格式: [timestamp_sec, ms, rms, act, mdf, fatigue, quality]（全部真实物理值）
         pos += snprintf(_jsonBuf + pos, sizeof(_jsonBuf) - pos,
-                 "[%lu,%d,%d,%d,%d,%d]",
+                 "[%lu,%u,%.3f,%.1f,%.1f,%.1f,%u]",
                  (unsigned long)_batchBuffer[i].timestamp_sec,
-                 (int)(_batchBuffer[i].rms * 1000),
-                 (int)(_batchBuffer[i].act * 10),
-                 (int)(_batchBuffer[i].mdf * 10),
-                 (int)(_batchBuffer[i].fatigue * 10),
+                 (unsigned)_batchBuffer[i].ms,
+                 _batchBuffer[i].rms,
+                 _batchBuffer[i].act,
+                 _batchBuffer[i].mdf,
+                 _batchBuffer[i].fatigue,
                  _batchBuffer[i].quality);
     }
     snprintf(_jsonBuf + pos, sizeof(_jsonBuf) - pos, "]}");

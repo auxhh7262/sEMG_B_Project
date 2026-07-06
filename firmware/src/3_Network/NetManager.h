@@ -78,6 +78,7 @@ private:
 
     struct DataPoint {
         uint32_t timestamp_sec;  // NTP同步的Unix秒数（0表示未同步）
+        uint16_t ms;             // 真实毫秒（0-999）
         float rms, act, mdf, fatigue;
         uint8_t quality;
     };

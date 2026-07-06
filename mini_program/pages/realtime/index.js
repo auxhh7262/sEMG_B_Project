@@ -234,14 +234,14 @@ Page({
       timeStr = `${String(d.getUTCHours()).padStart(2,'0')}:${String(d.getUTCMinutes()).padStart(2,'0')}:${String(d.getUTCSeconds()).padStart(2,'0')}.${String(d.getUTCMilliseconds()).padStart(3,'0')}`;
     }
 
-    const actPct = pt.activation != null ? Math.max(0, Math.min(100, pt.activation / 10)) : null;
-    const fatPct = pt.fatigue != null ? Math.max(0, Math.min(100, pt.fatigue / 10)) : null;
+    const actPct = pt.activation != null ? Math.max(0, Math.min(100, pt.activation)) : null;
+    const fatPct = pt.fatigue != null ? Math.max(0, Math.min(100, pt.fatigue)) : null;
 
     return {
       time: timeStr,
-      rms: (pt.rms / 1000 || 0).toFixed(3),
+      rms: (pt.rms || 0).toFixed(3),
       act: actPct != null ? actPct.toFixed(1) + '%' : '--',
-      mdf: (pt.mdf / 10 || 0).toFixed(1),
+      mdf: (pt.mdf || 0).toFixed(1),
       fat: fatPct != null ? fatPct.toFixed(1) + '%' : '--',
       q: pt.quality != null ? pt.quality + '%' : '--'
     };

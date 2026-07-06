@@ -60,7 +60,7 @@ exports.main = async (event, context) => {
         rms: item.rms,
         mdf: item.mdf,
         fatigue: item.fatigue,
-        activity: item.activity,
+        activation: item.activation,
         quality: item.quality
       }));
 
@@ -90,16 +90,16 @@ exports.main = async (event, context) => {
     const firstTs = firstRes.data[0]?.timestamp || 0;
     const lastTs = lastRes.data[0]?.timestamp || 0;
 
-    // 统计各疲劳等级的真实数量
+    // 统计各疲劳等级的真实数量（数据库中为真实物理值，阈值30/70）
     const statsRes = await db.collection('data_points')
       .aggregate()
       .match(where)
       .group({
         _id: $.cond({
-          if: $.lt(['$fatigue', 300]),
+          if: $.lt(['$fatigue', 30]),
           then: 'good',
           else: $.cond({
-            if: $.lt(['$fatigue', 700]),
+            if: $.lt(['$fatigue', 70]),
             then: 'warn',
             else: 'danger'
           })
@@ -128,7 +128,7 @@ exports.main = async (event, context) => {
       rms: item.rms,
       mdf: item.mdf,
       fatigue: item.fatigue,
-      activity: item.activity,
+      activation: item.activation,
       quality: item.quality
     }));
 

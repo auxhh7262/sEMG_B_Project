@@ -18,12 +18,29 @@ AppController::AppController(
 void AppController::init(void)
 {
     PersonalCalibData_t calib = {0};
+    bool calibValid = false;
     if (_storageMgr->GetPersonalCalib(&calib) && calib.calib_timestamp_sec > 0) {
-        LOG("[CTRL] Boot: loaded calib relax_mdf=%.1f\n", calib.relax_mdf_hz);
-        _signalProc->setCalibration(calib.relax_rms_mv, calib.active_rms_mv, calib.relax_mdf_hz);
-        _signalProc->setRelaxBaseline(calib.relax_rms_mv, calib.relax_mdf_hz);
+        LOG("[CTRL] Boot: loaded calib relax_rms=%.3f active_rms=%.3f relax_mdf=%.1f active_mdf=%.1f end_mdf=%.1f\n",
+            calib.relax_rms_mv, calib.active_rms_mv,
+            calib.relax_mdf_hz, calib.active_mdf_hz, calib.end_mdf_hz);
+        calibValid = true;
     } else {
         LOG("[CTRL] Boot: no calib in EEPROM\n");
+    }
+
+    UserProfileData_t profile = {0};
+    if (_storageMgr->GetUserProfile(&profile) && profile.name[0]) {
+        const char* genderStr = (profile.gender == 1) ? "male" : (profile.gender == 2) ? "female" : "unknown";
+        const char* handStr = (profile.handedness == 1) ? "left" : (profile.handedness == 2) ? "right" : "unknown";
+        LOG("[CTRL] Boot: loaded profile name=%s age=%u gender=%s hand=%s\n",
+            profile.name, (unsigned)profile.age, genderStr, handStr);
+    } else {
+        LOG("[CTRL] Boot: no profile in EEPROM\n");
+    }
+
+    if (calibValid) {
+        _signalProc->setCalibration(calib.relax_rms_mv, calib.active_rms_mv, calib.relax_mdf_hz);
+        _signalProc->setRelaxBaseline(calib.relax_rms_mv, calib.relax_mdf_hz);
     }
 
     _stateMgr->transitionTo(ST_RUNNING);
@@ -97,7 +114,7 @@ void AppController::tick(void)
         else if (_calibPhase == CALIB_ACTIVE) phaseTag = " [CALIB:ACTIVE]";
 
         static uint16_t _dataLogCounter = 0;
-        uint16_t logInterval = (_calibPhase == CALIB_RELAX || _calibPhase == CALIB_ACTIVE) ? 10 : 60;
+        uint16_t logInterval = (_calibPhase == CALIB_RELAX || _calibPhase == CALIB_ACTIVE) ? 10 : 20;
         if (++_dataLogCounter >= logInterval) {
             _dataLogCounter = 0;
             char timeBuf[32];

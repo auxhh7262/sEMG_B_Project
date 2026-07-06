@@ -234,7 +234,11 @@ void setup() {
         gNetManager.pauseWifiRetry();
     }
 
-    // 5. 1kHz ADC 定时器
+    // 5. 状态机 + 调度器（先加载校准，再启动Timer）
+    gState.init();
+    gAppController.init();
+
+    // 6. 1kHz ADC 定时器（校准加载完成后再启动采样）
     uint8_t timer_type = 0;
     int8_t timer_channel = FspTimer::get_available_timer(timer_type);
     if (timer_channel < 0) {
@@ -268,10 +272,6 @@ void setup() {
             }
         }
     }
-
-    // 6. 状态机 + 调度器
-    gState.init();
-    gAppController.init();
 
     delay(500);
     LOG("[MAIN] V3.0 Cloud init complete, Device: %s\n", gNetManager.getDeviceId());

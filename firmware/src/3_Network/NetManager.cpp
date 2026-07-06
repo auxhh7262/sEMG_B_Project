@@ -121,10 +121,6 @@ bool NetManager::initBlocking(uint32_t wifiTimeoutMs) {
     LOG("[NET] WiFi connected! IP: %s, SSID: %s\n",
         WiFi.localIP().toString().c_str(), WiFi.SSID());
 
-    // 等待 2 秒让网络稳定
-    LOG("[NET] Waiting 2s for network to stabilize...\n");
-    delay(2000);
-
     // NTP 时间同步（阻塞等待，北京时间）
     LOG("[NET] Starting NTP sync (blocking)...\n");
     _ntpUdp.begin(8889);

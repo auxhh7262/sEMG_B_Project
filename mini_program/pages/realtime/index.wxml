@@ -44,7 +44,7 @@
     </view>
     <view class="th-col th-col-q">
       <text class="th-name th-name-q">信号质量</text>
-      <text class="th-unit th-unit-q"></text>
+      <text class="th-unit th-unit-q">(%)</text>
     </view>
   </view>
 
@@ -98,11 +98,11 @@
       </view>
       <view class="help-step">
         <text class="step-num">4</text>
-        <text class="step-text"><text class="step-bold">疲劳度(%)</text> — 基于 MDF 计算：1-(当前MDF/静息MDF)，0%=无疲劳，100%=严重疲劳</text>
+        <text class="step-text"><text class="step-bold">疲劳度(%)</text> — 基于 MDF 动态基线计算：(收缩起始MDF-当前MDF)/收缩起始MDF×100%，0%=无疲劳，100%=严重疲劳</text>
       </view>
       <view class="help-step">
         <text class="step-num">5</text>
-        <text class="step-text"><text class="step-bold">信号质量</text> — RMS稳定性+MDF生理范围综合评分(0-100)，数值越高数据越可靠</text>
+        <text class="step-text"><text class="step-bold">信号质量(%)</text> — RMS范围合理性+MDF计算有效性+连续性综合评分(0-100)，数值越高数据越可靠</text>
       </view>
     </view>
   </view>

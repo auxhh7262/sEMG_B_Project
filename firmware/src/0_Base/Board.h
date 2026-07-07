@@ -9,6 +9,11 @@
 // =============== 板载指示灯 ===============
 #define PIN_LED_BUILTIN LED_BUILTIN
 
+// =============== RGB LED 引脚 ===============
+#define PIN_RGB_R 2   // 红色通道
+#define PIN_RGB_G 3   // 绿色通道
+#define PIN_RGB_B 4   // 蓝色通道
+
 // =============== 串口定义 ===============
 #define SERIAL_COMM Serial  // USB 调试串口
 #define SERIAL_ESP32 Serial1 // 与 ESP32 通信的硬件 UART

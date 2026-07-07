@@ -194,6 +194,13 @@ void setup() {
     pinMode(PIN_LED_BUILTIN, OUTPUT);
     digitalWrite(PIN_LED_BUILTIN, LOW);
 
+    pinMode(PIN_RGB_R, OUTPUT);
+    pinMode(PIN_RGB_G, OUTPUT);
+    pinMode(PIN_RGB_B, OUTPUT);
+    digitalWrite(PIN_RGB_R, LOW);
+    digitalWrite(PIN_RGB_G, LOW);
+    digitalWrite(PIN_RGB_B, LOW);
+
     // 1. 信号处理器
     analogReadResolution(14);
     gSignal.init();

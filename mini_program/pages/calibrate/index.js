@@ -484,7 +484,7 @@ Page({
   _validateResult() {
     const { relaxRms, relaxMdf, activeRms, activeMdf } = this.data;
 
-    const rms_ok = activeRms > relaxRms * 2.0 && activeRms >= 0.0005;
+    const rms_ok = activeRms > relaxRms * 2.0 && activeRms >= 0.5;
     const mdf_ok = relaxMdf >= 10 && relaxMdf <= 250 && (!activeMdf || (activeMdf >= 10 && activeMdf <= 250));
 
     this.setData({

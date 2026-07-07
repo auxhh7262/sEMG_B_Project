@@ -75,7 +75,7 @@
         <text class="stats-value">{{statsInfo.dangerCount}}</text>
         <text class="stats-sub">{{statsInfo.dangerPct}}%</text>
       </view>
-      <text class="stats-label">重度疲劳</text>
+      <text class="stats-label">严重疲劳</text>
     </view>
   </view>
 

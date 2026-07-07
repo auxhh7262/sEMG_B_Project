@@ -157,14 +157,34 @@ void AppController::onCommandReceived(AppCommand_t cmd)
     }
 }
 
+static void _setRgbLed(float fatigue) {
+    if (fatigue < 30.0f) {
+        digitalWrite(PIN_RGB_R, LOW);   // 红灭
+        digitalWrite(PIN_RGB_G, HIGH);  // 绿亮
+        digitalWrite(PIN_RGB_B, LOW);   // 蓝灭
+    } else if (fatigue < 70.0f) {
+        digitalWrite(PIN_RGB_R, LOW);   // 红灭
+        digitalWrite(PIN_RGB_G, LOW);   // 绿灭
+        digitalWrite(PIN_RGB_B, HIGH);  // 蓝亮
+    } else {
+        digitalWrite(PIN_RGB_R, HIGH);  // 红亮
+        digitalWrite(PIN_RGB_G, LOW);   // 绿灭
+        digitalWrite(PIN_RGB_B, LOW);   // 蓝灭
+    }
+}
+
 void AppController::_handleRunningState(float rms, float mdf, float fatigue,
                                          uint8_t quality, float activation)
 {
-    // Data already pushed in tick() via pushDataPoint
-    (void)rms; (void)mdf; (void)fatigue; (void)quality; (void)activation;
+    (void)rms; (void)mdf; (void)quality; (void)activation;
+    _setRgbLed(fatigue);
 }
 
-void AppController::_handleErrorState(void) {}
+void AppController::_handleErrorState(void) {
+    digitalWrite(PIN_RGB_R, LOW);
+    digitalWrite(PIN_RGB_G, LOW);
+    digitalWrite(PIN_RGB_B, LOW);
+}
 
 // ==================== Calibration Handlers ====================
 

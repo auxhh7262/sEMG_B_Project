@@ -312,8 +312,10 @@ bool NetManager::pushDataPoint(float rms, float act,
     uint32_t tsSec = getCurrentTimeSec();
     uint16_t ms = (uint16_t)((millis() - _ntpBaseMs) % 1000);
 
-    // ===== 分钟统计累计 =====
-    _updateMinuteStats(rms, mdf, fatigue, quality);
+    // ===== 分钟统计累计（低质量帧不计入，避免开路噪声污染均值）=====
+    if (quality >= 30) {
+        _updateMinuteStats(rms, mdf, fatigue, quality);
+    }
 
     // ===== 分钟边界检测 =====
     // 每60秒触发一次分钟统计上传
@@ -372,7 +374,7 @@ void NetManager::_checkIngest() {
 
     for (uint8_t i = 0; i < _batchCount; i++) {
         if (i > 0) pos += snprintf(_jsonBuf + pos, sizeof(_jsonBuf) - pos, ",");
-        // 格式: [timestamp_sec, ms, rms, act, mdf, fatigue, quality]（全部真实物理值）
+        // 格式: [timestamp_sec, ms, rms, act, mdf, fatigue, quality]
         pos += snprintf(_jsonBuf + pos, sizeof(_jsonBuf) - pos,
                  "[%lu,%u,%.3f,%.1f,%.1f,%.1f,%u]",
                  (unsigned long)_batchBuffer[i].timestamp_sec,
@@ -735,6 +737,7 @@ void NetManager::_ackCommand(const char* commandId) {
 // ==================== 分钟统计辅助函数 ====================
 
 void NetManager::_updateMinuteStats(float rms, float mdf, float fatigue, uint8_t quality) {
+    if (quality < 30) return;  // 低质量/开路帧不计入分钟统计
     _rmsSum += rms;
     if (rms > _rmsMax) _rmsMax = rms;
     if (rms < _rmsMin) _rmsMin = rms;

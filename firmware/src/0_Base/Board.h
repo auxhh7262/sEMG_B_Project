@@ -20,7 +20,10 @@
 #define ESP_BAUDRATE 115200
 
 // =============== ADC 参数（RA4M1 14-bit） ===============
-#define ADC_REF_MV 5000.0f   // 默认使用板载 5V 参考电压
+// UNO R4 WiFi 是 5V 板：RA4M1 与 GPIO 均运行在 5V，DEFAULT 模拟参考 = 5V。
+// （Arduino 规则：5V 板 DEFAULT=5V，3.3V 板 DEFAULT=3.3V；R4 WiFi 属前者。）
+// 传感器输出量程 0~3.0V（以 1.5V 为基准），< 5V 不会削顶。
+#define ADC_REF_MV 5000.0f   // UNO R4 WiFi DEFAULT 参考 = 5V
 #define ADC_MAX_VALUE 16383  // 2^14 - 1
 
 // =============== 校准流程参数 ===============

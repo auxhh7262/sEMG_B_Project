@@ -292,7 +292,7 @@ void loop() {
     if (g_adcTimerFlag) {
         g_adcTimerFlag = false;
         int raw = FAST_ADC_READ(PIN_EMG_ADC);
-        gSignal.isrPushSample(raw);
+        gSignal.pushSample(raw);
         gSignal.updateSampleRateStats();
     }
 

@@ -21,6 +21,20 @@ page {
   font-size: 24rpx;
 }
 
+/* 未佩戴设备警告（琥珀色，区别于红色连接警告） */
+.wear-warning {
+  background: rgba(255,169,64,0.12);
+  border: 1px solid rgba(255,169,64,0.35);
+  border-radius: 8rpx;
+  padding: 16rpx 20rpx;
+  margin-bottom: 20rpx;
+  text-align: center;
+}
+.wear-warning-text {
+  color: #ffa940;
+  font-size: 24rpx;
+}
+
 .container {
   height: 100vh;
   background: #0d0d0d;

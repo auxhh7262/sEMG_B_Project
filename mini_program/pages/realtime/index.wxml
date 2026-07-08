@@ -12,6 +12,11 @@
   <text class="algo-value">{{algorithm}}</text>
 </view>
 
+<!-- ===== 未佩戴设备警告 ===== -->
+<view class="wear-warning" wx:if="{{connected && wearWarning}}">
+  <text class="wear-warning-text">⚠️ 未检测到肌电信号，请佩戴设备并确保电极接触皮肤</text>
+</view>
+
 <!-- ===== 无校准提示 ===== -->
 <view class="conn-warning" wx:if="{{connected && algorithm === '无校准'}}">
   <text class="conn-warning-text">⚠️ 无校准数据，仅显示原始RMS/MDF，疲劳值仅供参考</text>

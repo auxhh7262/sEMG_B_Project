@@ -168,7 +168,7 @@ module.exports.val = val;
       <!-- FAIL原因提示 -->
       <view class="fail-reasons" wx:if="{{validation && !validation.ok}}">
         <text wx:if="{{!validation.rms_ok}}" class="fail-reason-text">- RMS未达标准(需最大收缩>2倍静息值且>=0.5mV)</text>
-        <text wx:if="{{!validation.mdf_ok}}" class="fail-reason-text">- MDF超出范围(需10-250Hz)</text>
+        <text wx:if="{{!validation.mdf_ok}}" class="fail-reason-text">- MDF超出范围(需20-250Hz)</text>
       </view>
 
       <!-- PASS：显示保存按钮 -->

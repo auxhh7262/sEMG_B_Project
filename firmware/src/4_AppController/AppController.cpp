@@ -127,8 +127,8 @@ void AppController::tick(void)
                 unsigned int hh = s / 3600, mm = (s / 60) % 60, ss = s % 60;
                 snprintf(timeBuf, sizeof(timeBuf), "%02u:%02u:%02u.%03u", hh, mm, ss, (unsigned)ms);
             }
-            LOG("[DATA]%s %s rms=%.3f act=%.1f%% mdf=%.1f fatigue=%.1f%% q=%u\n",
-                phaseTag, timeBuf, rms, activation, mdf, fatigue, quality);
+            LOG("[DATA]%s %s rms=%.3f act=%.1f%% mdf=%.1f fatigue=%.1f%% q=%u pmains=%.1f\n",
+                phaseTag, timeBuf, rms, activation, mdf, fatigue, quality, _signalProc->getMainsRms());
         }
     }
 

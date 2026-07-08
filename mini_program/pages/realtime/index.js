@@ -15,6 +15,7 @@ Page({
     historyRows: [],
     algorithm: '无校准',
     scrollIntoId: 'row-0',
+    wearWarning: false,   // 电极开路/未佩戴提示
   },
 
   _historyRows: [],
@@ -89,8 +90,9 @@ Page({
           this.setData({
             historyRows: rows.slice(),
             scrollIntoId: 'row-' + (rows.length - 1),
-            quality: res.data[0].quality != null ? res.data[0].quality + '%' : '--',
-            timeStr: rows[rows.length - 1] ? rows[rows.length - 1].time : '--'
+            quality: rows[rows.length - 1] ? rows[rows.length - 1].q : '--',
+            timeStr: rows[rows.length - 1] ? rows[rows.length - 1].time : '--',
+            wearWarning: rows[rows.length - 1] ? (rows[rows.length - 1].worn === false) : false
           });
           log('[realtime] Loaded %d history rows, _lastPollTs=%s', rows.length, this._lastPollTs);
         })
@@ -250,13 +252,21 @@ Page({
     const actPct = pt.activation != null ? Math.max(0, Math.min(100, pt.activation)) : null;
     const fatPct = pt.fatigue != null ? Math.max(0, Math.min(100, pt.fatigue)) : null;
 
+    // 未佩戴/开路：固件已将质量分压到极低(3%)，直接用 quality 阈值判断
+    // quality 缺失(旧数据)时默认视为已佩戴，避免误弹横幅
+    const worn = pt.quality == null ? true : pt.quality >= 30;
+
     return {
       time: timeStr,
       rms: (pt.rms || 0).toFixed(3),
-      act: actPct != null ? actPct.toFixed(1) + '%' : '--',
+      // 未佩戴：激活度与疲劳度一同隐藏，用 '--' 占位（保持口径统一）
+      act: (!worn) ? '--' : (actPct != null ? actPct.toFixed(1) + '%' : '--'),
       mdf: (pt.mdf || 0).toFixed(1),
-      fat: fatPct != null ? fatPct.toFixed(1) + '%' : '--',
-      q: pt.quality != null ? pt.quality + '%' : '--'
+      // 未佩戴：不显示虚假疲劳度/激活度，用 '--' 占位
+      fat: (!worn) ? '--' : (fatPct != null ? fatPct.toFixed(1) + '%' : '--'),
+      // 未佩戴：质量列提示佩戴状态
+      q: (!worn) ? '请佩戴' : (pt.quality != null ? pt.quality + '%' : '--'),
+      worn: worn
     };
   },
 
@@ -273,9 +283,11 @@ Page({
         this.setData({
           historyRows: this._historyRows.slice(),
           scrollIntoId: 'row-0',
-          quality: pt.quality != null ? pt.quality + '%' : '--',
+          quality: histRow.q,
           timeStr: histRow.time,
-          connected: true
+          connected: true,
+          // 电极开路/未佩戴：显示提示横幅（valid===0）
+          wearWarning: histRow.worn === false
         });
       }
 

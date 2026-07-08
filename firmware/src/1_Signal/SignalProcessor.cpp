@@ -1,4 +1,4 @@
-﻿#include "0_Base/Board.h"
+#include "0_Base/Board.h"
 #include "0_Base/Logger.h"
 #include "SignalProcessor.h"
 
@@ -39,7 +39,7 @@ SignalProcessor::SignalProcessor() :
     m_fatigue(0.0f), m_activation(0.0f),
     m_relaxRMS_mV(0.0f), m_activeRMS_mV(0.0f),  // 0=未校准,避免默认计算出100%activation
     m_relaxMDF_hz(100.0f),
-    m_contractionStartMDF(0.0f),
+    m_activeMDF_hz(100.0f),
     m_isCalibrated(false),
     m_isContracting(false),
     m_currentMDF(50.0f), m_lastValidMDF(50.0f), m_isMdfValid(false),
@@ -57,8 +57,6 @@ SignalProcessor::SignalProcessor() :
     m_qualityValidFrames(0), m_qualityTotalFrames(0), m_qualityWindowFull(false),
     m_snapshotDCBias(0.0f), m_snapshotValid(false), m_snapshotSize(0),
     m_mvPerAdcUnit(0.0f),
-    m_baselineMDF_hz(0.0f),
-    m_wasActive20(false),
     m_currentRMS(0.0f),
     // 校准MDF缓冲区初始化
     m_calibMdfIndex(0),
@@ -79,7 +77,6 @@ SignalProcessor::SignalProcessor() :
 void SignalProcessor::init() {
     m_writeIndex = 0; m_readIndex = 0;
     m_fatigue = 0.0f; m_activation = 0.0f; m_isCalibrated = false;
-    m_contractionStartMDF = 0.0f;
     m_isContracting = false;
     m_currentMDF = 0.0f; m_lastValidMDF = 80.0f; m_isMdfValid = false;
     m_signalQuality = 0.0f; m_lastTotalPower = 0.0f; m_rawMDF = 0.0f;
@@ -539,28 +536,34 @@ void SignalProcessor::updateFatigue(float rms, float mdf) {
         m_activation = 0.0f;
     }
 
-    // Contraction detection: RMS > 2x relax_rms
-    m_isContracting = (rms > m_relaxRMS_mV * 2.0f);
+    // Contraction detection: RMS > 2x relax_rms AND RMS > 15mV AND MDF > relax + 5Hz
+    // Triple threshold: relative (2x baseline) + absolute (15mV) + MDF validity check
+    float mdfDiff = mdf - m_relaxMDF_hz;
+    m_isContracting = (rms > m_relaxRMS_mV * 2.0f) && (rms > 15.0f) && (mdfDiff > 5.0f);
 
-    // Fatigue: EMA-smoothed, dynamic baseline per contraction
+    // Fatigue: anchor formula using calibration reference points
+    //   F = (activeMDF - currentMDF) / (activeMDF - relaxMDF) × 100%
+    //   0% = fresh contraction, 100% = fatigued to near-relax level
     float f_raw = 0.0f;
-    if (m_relaxMDF_hz > 0.1f) {
-        float baseline_mdf = m_baselineMDF_hz > 0.1f ? m_baselineMDF_hz : m_relaxMDF_hz;
-        f_raw = (baseline_mdf - mdf) / baseline_mdf * 100.0f;
+    if (m_isContracting && m_activeMDF_hz > m_relaxMDF_hz + 5.0f) {
+        float range = m_activeMDF_hz - m_relaxMDF_hz;
+        f_raw = (m_activeMDF_hz - mdf) / range * 100.0f;
         f_raw = constrain(f_raw, 0.0f, 100.0f);
     }
-    // ========== Fatigue EMA α 取值依据 ==========
-    // 疲劳指数公式: FI = (MDF_基线 - MDF_当前) / MDF_基线 × 100%
+    // ========== Fatigue Formula ==========
+    // 疲劳指数: FI = (activeMDF - currentMDF) / (activeMDF - relaxMDF) × 100%
+    // 利用校准阶段已知的 activeMDF(峰值) 和 relaxMDF(静息) 作为锚点，
+    // 避免监测阶段动态基线捕获时机过早导致的负值问题。
+    //
     // 参考文献:
     // [4] Cifrek M, Medved V, Tonković S, Ostojić S. Surface EMG based
     //     muscle fatigue evaluation in biomechanics.
     //     Clinical Biomechanics, 2009, 24(4):327-340.
-    //     → 综述sEMG疲劳评估方法，归一化MDF下降率为标准疲劳指数
+    //     → 归一化MDF下降率为标准疲劳指数
     // [5] González-Izal M, Malanda A, Gorostiaga E, Izquierdo M.
     //     Electromyographic models to assess muscle fatigue.
     //     J Electromyography and Kinesiology, 2012, 22(4):501-512.
-    //     → 综述多种EMG疲劳模型，验证MDF下降率与主观疲劳量表(Borg)
-    //       呈显著相关(r>0.7)
+    //     → 验证MDF下降率与主观疲劳量表(Borg)呈显著相关(r>0.7)
     //
     // α=0.1 选择依据:
     // - 肌肉疲劳是缓慢变化的生理过程(10-60s时间尺度)[1]
@@ -572,24 +575,11 @@ void SignalProcessor::updateFatigue(float rms, float mdf) {
     if (m_fatigue < 0.0f) m_fatigue = 0.0f;
     if (m_fatigue > 100.0f) m_fatigue = 100.0f;
 
-    // Dynamic baseline: capture at contraction onset (A crosses 20% upward)
-    // m_isContracting set above: rms > 2x relax_rms (≈ A>66%)
-    // Use a lower threshold for baseline capture: activation > 20%
-    float activation = 0.0f;
-    if (m_activeRMS_mV > m_relaxRMS_mV) {
-        activation = constrain((rms - m_relaxRMS_mV) / (m_activeRMS_mV - m_relaxRMS_mV) * 100.0f, 0.0f, 100.0f);
-    }
-    if (!m_wasActive20 && activation > 20.0f) {
-        // Contraction onset: capture current MDF as baseline
-        m_baselineMDF_hz = mdf;
-    }
-    m_wasActive20 = (activation > 20.0f);
-
     // static uint32_t fatigue_log_cnt = 0;
     // if (++fatigue_log_cnt >= 600) {
     //     fatigue_log_cnt = 0;
-    //     LOG("[SIG] Fatigue: mdf=%.1f, bl_mdf=%.1f, f_raw=%.1f, f_ema=%.1f, act=%.0f\n",
-    //         mdf, (m_baselineMDF_hz > 0.1f ? m_baselineMDF_hz : m_relaxMDF_hz), f_raw, m_fatigue, activation);
+    //     LOG("[SIG] Fatigue: mdf=%.1f, f_raw=%.1f, f_ema=%.1f, act=%.0f\n",
+    //         mdf, f_raw, m_fatigue, activation);
     // }
 }
 
@@ -612,13 +602,14 @@ float SignalProcessor::update() {
     return rms;
 }
 
-void SignalProcessor::setCalibration(float relaxRMS_mV, float activeRMS_mV, float relaxMDF_hz) {
+void SignalProcessor::setCalibration(float relaxRMS_mV, float activeRMS_mV, float relaxMDF_hz, float activeMDF_hz) {
     m_relaxRMS_mV = relaxRMS_mV;
     m_activeRMS_mV = activeRMS_mV;
     m_relaxMDF_hz = relaxMDF_hz;
-    m_baselineMDF_hz = relaxMDF_hz;  // Initialize baseline MDF from calibration
+    m_activeMDF_hz = activeMDF_hz;
     m_isCalibrated = true;
-    m_contractionStartMDF = 0.0f;
+    LOG("[SIG] Calibration set: relax_rms=%.3f active_rms=%.3f relax_mdf=%.1f active_mdf=%.1f\n",
+        relaxRMS_mV, activeRMS_mV, relaxMDF_hz, activeMDF_hz);
 }
 
 void SignalProcessor::clearCalibration() {
@@ -626,7 +617,6 @@ void SignalProcessor::clearCalibration() {
     m_fatigue = 0.0f;
     m_activation = 0.0f;
     m_isContracting = false;
-    m_contractionStartMDF = 0.0f;
     m_lastValidMDF = 80.0f;
     m_isMdfValid = false;
     m_consecutivePhysioFrames = 0;

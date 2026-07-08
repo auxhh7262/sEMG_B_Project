@@ -98,7 +98,7 @@
       </view>
       <view class="help-step">
         <text class="step-num">4</text>
-        <text class="step-text"><text class="step-bold">疲劳度(%)</text> — 基于 MDF 动态基线计算：(收缩起始MDF-当前MDF)/收缩起始MDF×100%，0%=无疲劳，100%=严重疲劳</text>
+        <text class="step-text"><text class="step-bold">疲劳度(%)</text> — 基于 MDF 锚点公式计算：(Active峰值MDF-当前MDF)/(Active峰值MDF-静息MDF)×100%，0%=无疲劳，100%=严重疲劳</text>
       </view>
       <view class="help-step">
         <text class="step-num">5</text>

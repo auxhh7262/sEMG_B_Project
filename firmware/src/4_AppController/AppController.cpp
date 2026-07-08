@@ -39,7 +39,8 @@ void AppController::init(void)
     }
 
     if (calibValid) {
-        _signalProc->setCalibration(calib.relax_rms_mv, calib.active_rms_mv, calib.relax_mdf_hz);
+        _signalProc->setCalibration(calib.relax_rms_mv, calib.active_rms_mv,
+                                    calib.relax_mdf_hz, calib.active_mdf_hz);
         _signalProc->setRelaxBaseline(calib.relax_rms_mv, calib.relax_mdf_hz);
     }
 
@@ -264,7 +265,7 @@ void AppController::handleSaveCalib(int userScore,
     pcData.calib_timestamp_sec = _netMgr->getCurrentTimeSec();
     pcData.calib_timestamp_ms = _netMgr->getCurrentTimeMs();
     _storageMgr->UpdatePersonalCalib(&pcData);
-    _signalProc->setCalibration(relax_rms, active_rms, _calibRelaxMdf);
+    _signalProc->setCalibration(relax_rms, active_rms, _calibRelaxMdf, _calibActiveMdf);
 
     // [CLOUD] 上传校准数据到云端
     _netMgr->uploadCalibration(relax_rms, _calibRelaxMdf,

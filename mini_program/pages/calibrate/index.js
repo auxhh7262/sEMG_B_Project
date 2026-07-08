@@ -39,7 +39,7 @@ Page({
   _commandSent: false,
   _phaseTimeout: null,
   _phaseStartTs: 0,
-  _calibStartTs: 0,
+  _currentSessionId: null,
   _dataWatcher: null,
   _watchStarting: false,
 
@@ -227,7 +227,7 @@ Page({
       return;
     }
     this._commandSent = true;
-    this._calibStartTs = Date.now();
+    this._currentSessionId = null;
 
     wx.removeStorageSync('calib_data');
     this.setData({
@@ -254,7 +254,7 @@ Page({
       return;
     }
 
-    this._setPhaseTimeout(20, '放松校准超时，请重试');
+    this._setPhaseTimeout(30, '放松校准超时，请重试');
     this._startDataWatch();
     this._startPolling();
   },
@@ -407,71 +407,64 @@ Page({
 
       let session = null;
 
-      const res = await db.collection('sessions')
-        .where({ device_id: this._deviceId, status: 'calibrating' })
-        .orderBy('started_at', 'desc')
-        .limit(1)
-        .get();
-
-      logger.log('[calibrate] poll: found', res.data ? res.data.length : 0, 'calibrating sessions');
-
-      if (res.data && res.data.length > 0) {
-        session = res.data[0];
+      if (this._currentSessionId) {
+        const res = await db.collection('sessions')
+          .doc(this._currentSessionId)
+          .get();
+        session = res.data;
+        logger.log('[calibrate] poll by sessionId:', this._currentSessionId, 'status:', session?.status);
       } else {
-        const res2 = await db.collection('sessions')
-          .where({ device_id: this._deviceId, status: 'completed' })
+        const res = await db.collection('sessions')
+          .where({ device_id: this._deviceId, status: 'calibrating' })
           .orderBy('started_at', 'desc')
           .limit(1)
           .get();
-        if (res2.data && res2.data.length > 0) {
-          session = res2.data[0];
-          logger.log('[calibrate] poll: found completed session instead');
+
+        if (res.data && res.data.length > 0) {
+          session = res.data[0];
+          this._currentSessionId = session._id;
+          logger.log('[calibrate] found new calibrating session, tracking id:', session._id);
         }
       }
 
-      if (session) {
+      if (session && session.calibration) {
         logger.log('[calibrate] poll session.calibration:', JSON.stringify(session.calibration));
-        logger.log('[calibrate] session started_at:', session.started_at, 'calibStartTs:', this._calibStartTs);
 
-        if (session.calibration) {
-          const { relax_rms, relax_mdf, active_rms, active_mdf, end_mdf } = session.calibration;
+        const { relax_rms, relax_mdf, active_rms, active_mdf, end_mdf } = session.calibration;
 
-          logger.log('[calibrate] poll fields: relax_rms=' + relax_rms,
-            'active_rms=' + active_rms,
-            'this.relaxRms=' + this.data.relaxRms,
-            'this.activeRms=' + this.data.activeRms);
+        logger.log('[calibrate] poll fields: relax_rms=' + relax_rms,
+          'active_rms=' + active_rms,
+          'this.relaxRms=' + this.data.relaxRms,
+          'this.activeRms=' + this.data.activeRms);
 
-          const isNewSession = session.started_at >= this._calibStartTs - 5000;
+        if (relax_rms !== undefined && relax_rms > 0 && !active_rms && !this.data.relaxRms) {
+          this._clearPhaseTimeout();
+          this._commandSent = false;
+          this._stopDataWatch();
+          this.setData({
+            relaxRms: relax_rms,
+            relaxMdf: relax_mdf || 0,
+            phase: 'active_ready',
+            statusText: '放松校准完成，请握紧拳头至最大力，准备好了就点击下方按钮',
+          });
+          this._stopPolling();
+          return;
+        }
 
-          if (isNewSession && relax_rms !== undefined && relax_rms > 0 && !active_rms && !this.data.relaxRms) {
-            this._clearPhaseTimeout();
-            this._commandSent = false;
-            this._stopDataWatch();
-            this.setData({
-              relaxRms: relax_rms,
-              relaxMdf: relax_mdf || 0,
-              phase: 'active_ready',
-              statusText: '放松校准完成，请握紧拳头至最大力，准备好了就点击下方按钮',
-            });
-            this._stopPolling();
-            return;
-          }
-
-          if (isNewSession && active_rms !== undefined && active_rms > 0 && !this.data.activeRms) {
-            this._clearPhaseTimeout();
-            this._commandSent = false;
-            this._stopDataWatch();
-            this.setData({
-              activeRms: active_rms,
-              activeMdf: active_mdf || 0,
-              endMdf: end_mdf || 0,
-              phase: 'result',
-              statusText: '校准完成，请确认结果',
-            });
-            this._validateResult();
-            this._stopPolling();
-            return;
-          }
+        if (active_rms !== undefined && active_rms > 0 && !this.data.activeRms) {
+          this._clearPhaseTimeout();
+          this._commandSent = false;
+          this._stopDataWatch();
+          this.setData({
+            activeRms: active_rms,
+            activeMdf: active_mdf || 0,
+            endMdf: end_mdf || 0,
+            phase: 'result',
+            statusText: '校准完成，请确认结果',
+          });
+          this._validateResult();
+          this._stopPolling();
+          return;
         }
       }
 
@@ -502,6 +495,7 @@ Page({
     this._stopDataWatch();
     this._clearPhaseTimeout();
     this._commandSent = false;
+    this._currentSessionId = null;
     this.setData({
       phase: 'idle',
       statusText: '点击下方按钮开始校准',

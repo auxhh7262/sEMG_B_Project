@@ -24,6 +24,7 @@ Page({
   _sessionId: null,
   _tabVisible: false,
   _lastRenderTime: 0,
+  _watchRetryDelay: 0,
 
   // ==== 兜底轮询相关 ====
   _pollTimer: null,
@@ -148,6 +149,7 @@ Page({
         onChange: (snapshot) => {
           this._watchActive = true;
           this._lastWatchDataMs = Date.now();
+          this._watchRetryDelay = 0;
           if (!this._tabVisible) return;
           const docs = snapshot.docs;
           if (docs && docs.length > 0) {
@@ -157,12 +159,12 @@ Page({
         onError: (e) => {
           error('[realtime] Watch error:', e);
           this._watchActive = false;
-          // 3 秒后自动重连
+          this._watchRetryDelay = this._watchRetryDelay === 0 ? 5000 : Math.min(this._watchRetryDelay * 2, 30000);
           setTimeout(() => {
             log('[realtime] Watch reconnecting...');
             this._stopWatch();
             this._startWatch();
-          }, 3000);
+          }, this._watchRetryDelay);
         }
       });
     log('[realtime] Watch started');

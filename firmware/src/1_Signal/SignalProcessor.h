@@ -35,7 +35,7 @@ public:
     float getActivation() const;
 
     // 校准接口
-    void setCalibration(float relaxRMS_mV, float activeRMS_mV, float relaxMDF_hz);
+    void setCalibration(float relaxRMS_mV, float activeRMS_mV, float relaxMDF_hz, float activeMDF_hz);
     void clearCalibration();
     bool isCalibrated() const { return m_isCalibrated; }
     float getRelaxRms() const { return m_relaxRMS_mV; }
@@ -106,9 +106,7 @@ private:
     float m_relaxRMS_mV;
     float m_activeRMS_mV;
     float m_relaxMDF_hz;
-    float m_baselineMDF_hz;   // dynamic baseline per contraction
-    bool m_wasActive20;       // for contraction onset detection
-    float m_contractionStartMDF;  // 收缩开始时的MDF，用于疲劳度计算
+    float m_activeMDF_hz;         // 校准Active阶段峰值MDF，疲劳度锚点公式分母
     bool m_isCalibrated;
     bool m_isContracting;
 

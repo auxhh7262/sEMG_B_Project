@@ -597,7 +597,8 @@ void NetManager::tick() {
     _checkIngest();
 
     uint32_t now = millis();
-    if (_wifiConnected && now - _lastCommandCheck >= 10000) {
+    // 命令轮询间隔：3秒（原10秒太长，导致校准指令延迟、relax阶段数据来不及显示）
+    if (_wifiConnected && now - _lastCommandCheck >= 3000) {
         _lastCommandCheck = now;
         _checkCommand();
     }

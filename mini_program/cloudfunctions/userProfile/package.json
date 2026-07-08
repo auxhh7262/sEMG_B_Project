@@ -1,0 +1,9 @@
+{
+  "name": "userProfile",
+  "version": "1.0.0",
+  "description": "保存/读取用户个人信息（解决删除重装后丢失）",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "latest"
+  }
+}

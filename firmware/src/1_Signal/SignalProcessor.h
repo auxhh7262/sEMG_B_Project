@@ -93,7 +93,6 @@ private:
     static const uint16_t RING_BUFFER_MASK = 511;
     static const uint16_t MAX_FFT_SIZE = 256;
     static const uint16_t DEFAULT_FFT_SIZE = 256;
-    static const uint16_t QUALITY_WINDOW_SIZE = 50;
 
     // 环形缓冲区
     int16_t m_ringBuffer[RING_BUFFER_SIZE];
@@ -146,9 +145,7 @@ private:
 
     // 状态机辅助变量
     uint16_t m_consecutivePhysioFrames;
-    uint16_t m_qualityValidFrames;
-    uint16_t m_qualityTotalFrames;
-    bool m_qualityWindowFull;
+    float m_qualityContinuityEma;     // EMA平滑的连续性比例（替代硬重置窗口）
 
     // 共享快照缓存
     int16_t m_snapshot[MAX_FFT_SIZE];
@@ -177,6 +174,10 @@ private:
                               float max_freq);
 
     float m_currentRMS;           // 当前实时RMS
+
+    // RMS趋势EMA - 用于检测收缩力变化（力混杂效应）
+    // Phinyomark et al. (2012): MDF随收缩力变化，是疲劳评估的已知混杂因子
+    float m_rmsTrendEma;           // RMS慢速EMA，作为力稳定性的基准
 
     // 校准MDF缓冲区
     static const uint16_t CALIB_MDF_BUF_SIZE = 200;

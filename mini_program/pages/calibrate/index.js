@@ -82,6 +82,11 @@ Page({
           if (docs && docs.length > 0) {
             const pt = docs[0];
             const { phase } = this.data;
+            // 只接受校准阶段开始后的新数据，避免旧数据点污染显示
+            const ptTime = pt.timestamp || pt.created_at || 0;
+            if (this._phaseStartTs && ptTime < this._phaseStartTs - 5000) {
+              return;  // 数据点比校准开始早5秒以上，跳过
+            }
             if (phase === 'relax') {
               this.setData({
                 liveRelaxRms: pt.rms ? pt.rms.toFixed(3) : null,
@@ -174,7 +179,52 @@ Page({
         currentUser: user,
         userMetaStr: `${user.name} | ${user.age}岁 | ${user.gender === 1 ? '男' : '女'} | ${user.handedness === 1 ? '左手腕' : '右手腕'}`,
       });
+      return;
     }
+    // 本地为空（删除重装），从云端恢复
+    if (!wx.cloud) return;
+    if (this._userRestoring) return;
+    this._userRestoring = true;
+    this._restoreUserProfileFromCloud(0);
+  },
+
+  _restoreUserProfileFromCloud(retry = 0) {
+    const MAX_RETRY = 3;
+    wx.cloud.callFunction({
+      name: 'userProfile',
+      data: { action: 'get' },
+      success: (res) => {
+        if (res.result && res.result.code === 0 && res.result.name) {
+          const user = {
+            name: res.result.name,
+            age: res.result.age,
+            gender: res.result.gender,
+            handedness: res.result.handedness,
+          };
+          storage.setCurrentUser(user);
+          storage.saveCurrentUser(user);
+          this._userRestoring = false;
+          this.setData({
+            currentUser: user,
+            userMetaStr: `${user.name} | ${user.age}岁 | ${user.gender === 1 ? '男' : '女'} | ${user.handedness === 1 ? '左手腕' : '右手腕'}`,
+          });
+          logger.log('[calibrate] user profile restored from cloud');
+        } else if (retry < MAX_RETRY) {
+          logger.log('[calibrate] userProfile restore retry', retry + 1, res.result);
+          setTimeout(() => this._restoreUserProfileFromCloud(retry + 1), 2000);
+        } else {
+          this._userRestoring = false;
+        }
+      },
+      fail: (e) => {
+        logger.warn('[calibrate] userProfile get failed:', e);
+        if (retry < MAX_RETRY) {
+          setTimeout(() => this._restoreUserProfileFromCloud(retry + 1), 2000);
+        } else {
+          this._userRestoring = false;
+        }
+      },
+    });
   },
 
   _loadCalibData() {
@@ -190,8 +240,67 @@ Page({
           saved: true,
           statusText: '已加载校准数据',
         });
+        return;
       }
     } catch (_) {}
+    // 本地缓存为空，从云端恢复
+    if (wx.cloud) {
+      if (this._calibRestoring) return;
+      this._calibRestoring = true;
+      this.setData({ statusText: '校准数据恢复中...' });
+      this._restoreCalibFromCloud(0);
+    }
+  },
+
+  _restoreCalibFromCloud(retry = 0) {
+    const MAX_RETRY = 3;
+    const deviceId = wx.getStorageSync('deviceId') || '';
+    wx.cloud.callFunction({
+      name: 'getCalibration',
+      data: { device_id: deviceId || undefined },
+      success: (res) => {
+        if (res.result && res.result.code === 0 && res.result.calibration) {
+          const calib = res.result.calibration;
+          const calibData = {
+            relax_rms: calib.relax_rms,
+            relax_mdf: calib.relax_mdf,
+            active_rms: calib.active_rms,
+            active_mdf: calib.active_mdf,
+            end_mdf: calib.end_mdf || 0,
+          };
+          wx.setStorageSync('calib_data', calibData);
+          if (res.result.device_id) {
+            wx.setStorageSync('deviceId', res.result.device_id);
+          }
+          this._calibRestoring = false;
+          this.setData({
+            relaxRms: calib.relax_rms,
+            relaxMdf: calib.relax_mdf || 0,
+            activeRms: calib.active_rms,
+            activeMdf: calib.active_mdf || 0,
+            endMdf: calib.end_mdf || 0,
+            saved: true,
+            statusText: '已从云端恢复校准数据',
+          });
+          logger.log('[calibrate] calib restored from cloud:', calibData);
+        } else if (retry < MAX_RETRY) {
+          logger.log('[calibrate] calib restore retry', retry + 1, res.result);
+          setTimeout(() => this._restoreCalibFromCloud(retry + 1), 2000);
+        } else {
+          this._calibRestoring = false;
+          this.setData({ statusText: '未找到校准数据' });
+        }
+      },
+      fail: (e) => {
+        logger.warn('[calibrate] getCalibration failed:', e);
+        if (retry < MAX_RETRY) {
+          setTimeout(() => this._restoreCalibFromCloud(retry + 1), 2000);
+        } else {
+          this._calibRestoring = false;
+          this.setData({ statusText: '校准数据恢复失败' });
+        }
+      },
+    });
   },
 
   // ==================== 校准流程 ====================
@@ -229,7 +338,8 @@ Page({
     this._commandSent = true;
     this._currentSessionId = null;
 
-    wx.removeStorageSync('calib_data');
+    // 不删除本地 calib_data 缓存：如果用户中途放弃校准，旧数据仍保留
+    // setData 已清空页面显示变量，不影响新校准的展示
     this.setData({
       phase: 'relax',
       statusText: '请保持放松...',
@@ -564,7 +674,27 @@ Page({
       showUserForm: false,
     });
 
-    wx.showToast({ title: '保存成功', icon: 'success' });
+    // 同步到云端（防止删除重装后丢失）
+    if (wx.cloud) {
+      wx.cloud.callFunction({
+        name: 'userProfile',
+        data: { action: 'save', ...user },
+        success: (res) => {
+          if (res.result && res.result.code === 0) {
+            wx.showToast({ title: '保存成功', icon: 'success' });
+          } else {
+            const msg = (res.result && res.result.msg) || '未知错误';
+            wx.showToast({ title: '云端失败: ' + msg, icon: 'none', duration: 3000 });
+          }
+        },
+        fail: (e) => {
+          logger.warn('[calibrate] userProfile save failed:', e);
+          wx.showToast({ title: '云函数调用失败: ' + (e.errMsg || JSON.stringify(e)), icon: 'none', duration: 3000 });
+        },
+      });
+    } else {
+      wx.showToast({ title: '保存成功', icon: 'success' });
+    }
   },
 
   // ==================== 刷新 ====================

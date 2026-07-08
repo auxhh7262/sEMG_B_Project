@@ -96,7 +96,7 @@ module.exports.val = val;
       <view class="phase-transition">
         <text class="transition-icon">✓</text>
         <text class="transition-title">第一阶段完成</text>
-        <text class="transition-sub">静息态采集完毕，请握紧拳头至最大力，准备好后点击下方按钮进入第二阶段</text>
+        <text class="transition-sub">静息态采集完毕。请先保持放松，点击按钮后再立即握紧拳头至最大力。</text>
       </view>
       <button class="btn btn-primary btn-max-start" bindtap="onStartActive">开始第二阶段</button>
     </view>
@@ -107,8 +107,7 @@ module.exports.val = val;
     <view class="status-area">
       <view class="hint-box">
         <text class="hint-phase">最大收缩（约15秒）</text>
-        <text class="hint-text">请握紧拳头至最大力，并保持</text>
-        <text class="hint-text red">持续握紧拳头至最大力！</text>
+        <text class="hint-text red">请握紧拳头至最大力并保持</text>
       </view>
       <view class="live-values">
         <view class="live-item">
@@ -229,7 +228,7 @@ module.exports.val = val;
           </view>
         </view>
         <view class="form-btns">
-          <button plain form-type="submit" class="btn-primary">确认</button>
+          <button form-type="submit" class="btn-primary">保存</button>
           <button plain type="default" bindtap="onHideUserForm">取消</button>
         </view>
       </form>

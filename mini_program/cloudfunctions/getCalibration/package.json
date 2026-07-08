@@ -1,0 +1,9 @@
+{
+  "name": "getCalibration",
+  "version": "1.0.0",
+  "description": "读取最近校准数据（解决客户端权限问题）",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "latest"
+  }
+}

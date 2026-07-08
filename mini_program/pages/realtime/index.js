@@ -23,6 +23,7 @@ Page({
   _starting: false,
   _sessionId: null,
   _tabVisible: false,
+  _calibRestoring: false,
   _lastRenderTime: 0,
   _watchRetryDelay: 0,
 
@@ -34,9 +35,19 @@ Page({
 
   onLoad() {
     log('[realtime] Cloud onLoad');
+    this._initDeviceId();
     this._loadCalibFromCache();
     this._loadRecentHistory();
     this._startWatch();
+  },
+
+  // 本地无 deviceId（如删除重装）时，先从云端发现在线设备并缓存，
+  // 保证后续校准恢复/数据查询都能用真实 deviceId，不依赖不稳定的 data_points 发现
+  _initDeviceId() {
+    const deviceId = wx.getStorageSync('deviceId') || '';
+    if (!deviceId && wx.cloud) {
+      this._discoverDeviceFromCloud();
+    }
   },
 
   onShow() {
@@ -285,7 +296,101 @@ Page({
         this._relaxRms = c.relax_rms;
         this._activeRms = c.active_rms;
         this.setData({ algorithm: '已校准' });
+        return;
       }
     } catch (_) {}
+    // 本地缓存为空（如删除重装），从云端恢复
+    if (this._calibRestoring) return;   // 避免 onLoad/onShow 重复触发
+    this._calibRestoring = true;
+    this.setData({ algorithm: '恢复中...' });
+    this._restoreCalibFromCloud(0);
+  },
+
+  // ==================== 设备发现 ====================
+  // 本地无 deviceId（如删除重装）时，从云端 device_status 发现在线设备并缓存
+  // 返回 Promise<deviceId>，失败时 resolve('') —— 防止 getCalibration 因
+  // data_points 发现分支不可靠（集合为空时返回 404）而恢复失败
+  _discoverDeviceFromCloud() {
+    return new Promise((resolve) => {
+      if (!wx.cloud) return resolve('');
+      const db = wx.cloud.database({ env: CLOUD_ENV });
+      db.collection('device_status')
+        .where({ status: 'online' })
+        .limit(1)
+        .get()
+        .then(res => {
+          if (res.data && res.data.length > 0 && res.data[0].device_id) {
+            const deviceId = res.data[0].device_id;
+            wx.setStorageSync('deviceId', deviceId);
+            log('[realtime] deviceId from cloud:', deviceId);
+            resolve(deviceId);
+          } else {
+            log('[realtime] no device found in cloud');
+            resolve('');
+          }
+        })
+        .catch(e => {
+          warn('[realtime] discover device error:', e);
+          resolve('');
+        });
+    });
+  },
+
+  _restoreCalibFromCloud(retry = 0) {
+    if (!wx.cloud) { this._calibRestoring = false; return; }
+    const MAX_RETRY = 3;
+
+    const query = (deviceId) => {
+      wx.cloud.callFunction({
+        name: 'getCalibration',
+        data: { device_id: deviceId || undefined },
+        success: (res) => {
+          if (res.result && res.result.code === 0 && res.result.calibration) {
+            const calib = res.result.calibration;
+            const calibData = {
+              relax_rms: calib.relax_rms,
+              relax_mdf: calib.relax_mdf,
+              active_rms: calib.active_rms,
+              active_mdf: calib.active_mdf,
+            };
+            wx.setStorageSync('calib_data', calibData);
+            if (res.result.device_id) {
+              wx.setStorageSync('deviceId', res.result.device_id);
+            }
+            this._relaxRms = calib.relax_rms;
+            this._activeRms = calib.active_rms;
+            this._calibRestoring = false;
+            this.setData({ algorithm: '已校准' });
+            log('[realtime] calib restored from cloud:', calibData);
+          } else if (retry < MAX_RETRY) {
+            // 云端暂无可恢复数据或返回异常，延时重试（应对冷启动）
+            log('[realtime] calib restore retry', retry + 1, res.result);
+            setTimeout(() => this._restoreCalibFromCloud(retry + 1), 2000);
+          } else {
+            this._calibRestoring = false;
+            this.setData({ algorithm: '无校准' });
+            log('[realtime] no calib in cloud after retries:', res.result);
+          }
+        },
+        fail: (e) => {
+          warn('[realtime] getCalibration failed:', e);
+          if (retry < MAX_RETRY) {
+            setTimeout(() => this._restoreCalibFromCloud(retry + 1), 2000);
+          } else {
+            this._calibRestoring = false;
+            this.setData({ algorithm: '无校准' });
+          }
+        },
+      });
+    };
+
+    // 本地无 deviceId 时先从云端发现真实设备 ID，避免直接传 undefined 导致
+    // getCalibration 走 data_points 发现分支返回 404（realtime 页面此前缺失此逻辑）
+    const deviceId = wx.getStorageSync('deviceId') || '';
+    if (!deviceId) {
+      this._discoverDeviceFromCloud().then((id) => query(id));
+    } else {
+      query(deviceId);
+    }
   },
 });

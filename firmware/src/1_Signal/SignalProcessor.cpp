@@ -18,9 +18,6 @@
 #ifndef MAX_FFT_SIZE
 #define MAX_FFT_SIZE 256
 #endif
-#ifndef QUALITY_WINDOW_SIZE
-#define QUALITY_WINDOW_SIZE 50
-#endif
 
 // ==================== 调试日志宏（已修复快捷键缺失问题）====================
 #define SP_LOG(level, fmt, ...) do { \
@@ -43,7 +40,7 @@ SignalProcessor::SignalProcessor() :
     m_mdfRange(0.0f),
     m_isCalibrated(false),
     m_isContracting(false),
-    m_currentMDF(50.0f), m_lastValidMDF(50.0f), m_isMdfValid(false),
+    m_currentMDF(0.0f), m_lastValidMDF(0.0f), m_isMdfValid(false),
     m_signalQuality(0.0f),
     m_fftWindowSize(DEFAULT_FFT_SIZE),
     m_mdfMinFreq(10.0f), m_mdfMaxFreq(250.0f),
@@ -55,10 +52,11 @@ SignalProcessor::SignalProcessor() :
     m_availableSamples(0),
     m_droppedSamples(0),
     m_consecutivePhysioFrames(0),
-    m_qualityValidFrames(0), m_qualityTotalFrames(0), m_qualityWindowFull(false),
+    m_qualityContinuityEma(0.0f),
     m_snapshotDCBias(0.0f), m_snapshotValid(false), m_snapshotSize(0),
     m_mvPerAdcUnit(0.0f),
     m_currentRMS(0.0f),
+    m_rmsTrendEma(0.0f),
     // 校准MDF缓冲区初始化
     m_calibMdfIndex(0),
     m_calibMdfCount(0),
@@ -79,7 +77,7 @@ void SignalProcessor::init() {
     m_writeIndex = 0; m_readIndex = 0;
     m_fatigue = 0.0f; m_activation = 0.0f; m_isCalibrated = false;
     m_isContracting = false;
-    m_currentMDF = 0.0f; m_lastValidMDF = 80.0f; m_isMdfValid = false;
+    m_currentMDF = 0.0f; m_lastValidMDF = 0.0f; m_isMdfValid = false;
     m_signalQuality = 0.0f; m_lastTotalPower = 0.0f; m_rawMDF = 0.0f;
     m_debugEnabled = false; m_debugLevel = DEBUG_NONE;
     m_lastSampleTime = micros();
@@ -87,8 +85,9 @@ void SignalProcessor::init() {
     m_sampleCount = 0; m_sampleTimeAccum = 0;
     m_availableSamples = 0; m_droppedSamples = 0;
     m_consecutivePhysioFrames = 0;
-    m_qualityValidFrames = 0; m_qualityTotalFrames = 0; m_qualityWindowFull = false;
+    m_qualityContinuityEma = 0.0f;
     m_snapshotDCBias = 0.0f; m_snapshotValid = false; m_snapshotSize = 0;
+    m_rmsTrendEma = 0.0f;
     
     m_mvPerAdcUnit = ADC_REF_MV / (float)ADC_MAX_VALUE;
     initializeFFTTwiddles();
@@ -502,20 +501,11 @@ void SignalProcessor::evaluateSignalQuality(float rms, float mdf) {
         quality_score += 15.0f;
     }
 
-    // Reset BEFORE increment: window stays exactly QUALITY_WINDOW_SIZE frames
-    if (m_qualityTotalFrames >= QUALITY_WINDOW_SIZE) {
-        m_qualityTotalFrames = 0;
-        m_qualityValidFrames = 0;
-    }
-
-    m_qualityTotalFrames++;
-    if (m_isMdfValid) {
-        m_qualityValidFrames++;
-    }
-
-    float continuity = (m_qualityTotalFrames > 0)
-        ? (float)m_qualityValidFrames / m_qualityTotalFrames
-        : 0.0f;
+    // Continuity score: EMA of MDF validity ratio (replaces hard-reset sliding window)
+    // α=0.05 → time constant ~20 frames (~2s @10Hz), no periodic jump artifacts
+    float validSample = m_isMdfValid ? 1.0f : 0.0f;
+    m_qualityContinuityEma = m_qualityContinuityEma * 0.95f + validSample * 0.05f;
+    float continuity = m_qualityContinuityEma;
 
     quality_score += 30.0f * continuity;
     m_signalQuality = constrain(quality_score, 0.0f, 100.0f);
@@ -537,18 +527,55 @@ void SignalProcessor::updateFatigue(float rms, float mdf) {
         m_activation = 0.0f;
     }
 
-    // Contraction detection: RMS > 2x relax_rms AND RMS > 15mV AND MDF > relax + 5Hz
-    // Triple threshold: relative (2x baseline) + absolute (15mV) + MDF validity check
-    float mdfDiff = mdf - m_relaxMDF_hz;
-    m_isContracting = (rms > m_relaxRMS_mV * 2.0f) && (rms > 15.0f) && (mdfDiff > 5.0f);
+    // Contraction detection: RMS > 2x relax_rms AND RMS > active_rms × 0.3
+    // Dual threshold: relative (2x baseline) + relative-to-max (30% of active_rms)
+    // Removed MDF condition to prevent "fatigue ceiling" effect - at extreme fatigue,
+    // MDF may drop close to relaxMDF, causing contraction detection to fail
+    float activeThreshold = m_activeRMS_mV * 0.3f;  // 30% of max contraction as floor
+    float absThreshold = max(activeThreshold, 10.0f);  // Minimum 10mV for noise rejection
+    m_isContracting = (rms > m_relaxRMS_mV * 2.0f) && (rms > absThreshold);
+
+    // RMS trend EMA for force-change confound detection
+    // Phinyomark et al. (2012): MDF changes with contraction force level,
+    // confounding fatigue assessment. Track RMS trend to detect force changes.
+    if (m_rmsTrendEma < 1.0f) {
+        m_rmsTrendEma = rms;  // cold start
+    } else {
+        m_rmsTrendEma = m_rmsTrendEma * 0.97f + rms * 0.03f;  // ~3.3s τ @10Hz
+    }
 
     // Fatigue: anchor formula using calibration reference points
     //   F = (activeMDF - currentMDF) / (activeMDF - relaxMDF) × 100%
     //   0% = fresh contraction, 100% = fatigued to near-relax level
     float f_raw = 0.0f;
     if (m_isContracting && m_mdfRange > 5.0f) {
+        // Dynamic anchor update: if current MDF exceeds calibration peak,
+        // update activeMDF to prevent fatigue from being clamped to 0
+        // This handles cases where user didn't reach max contraction during calibration
+        if (mdf > m_activeMDF_hz && mdf > m_relaxMDF_hz + 10.0f) {
+            float delta = mdf - m_activeMDF_hz;
+            m_activeMDF_hz += delta * 0.1f;  // EMA update, slow convergence
+            m_mdfRange = m_activeMDF_hz - m_relaxMDF_hz;
+        }
         f_raw = (m_activeMDF_hz - mdf) / m_mdfRange * 100.0f;
         f_raw = constrain(f_raw, 0.0f, 100.0f);
+
+        // Force-stability cross-validation
+        // When RMS deviates from recent trend (force changing), reduce
+        // confidence in fatigue estimate to mitigate force-confound.
+        // Phinyomark (2012): MDF-force relationship is subject-dependent
+        // (CF1/CF2/CF3), so we reduce confidence for ANY rapid force change.
+        float forceStability = 1.0f;
+        if (m_rmsTrendEma > 1.0f) {
+            float ratio = rms / m_rmsTrendEma;
+            float deviation = fabs(ratio - 1.0f);  // 0=stable
+            if (deviation > 0.15f) {
+                // RMS deviating >15% → force is changing
+                // Scale: 0.15→1.0, 0.50→0.3 (floor at 30% confidence)
+                forceStability = 1.0f - constrain((deviation - 0.15f) / 0.35f, 0.0f, 0.7f);
+            }
+        }
+        f_raw *= forceStability;
     }
     // ========== Fatigue Formula ==========
     // 疲劳指数: FI = (activeMDF - currentMDF) / (activeMDF - relaxMDF) × 100%
@@ -569,9 +596,24 @@ void SignalProcessor::updateFatigue(float rms, float mdf) {
     // - 肌肉疲劳是缓慢变化的生理过程(10-60s时间尺度)[1]
     // - α=0.1 对应时间常数 ≈10帧(0.5s@20Hz)，有效抑制逐帧抖动
     // - 适合作为视觉反馈输出：变化平滑、无突兀跳变
+    //
+    // ========== Recovery Model ==========
+    // During relaxation, fatigue recovers exponentially based on:
+    // Elfving B, et al. Recovery of electromyographic median frequency
+    // after lumbar muscle fatigue. Eur J Appl Physiol, 2002, 88:85-93.
+    //   → MDF recovery half-life ≈ 35s (r²=0.98, n=55)
+    //
+    // At 10Hz update rate, per-frame decay factor:
+    //   factor = 2^(-Δt / half_life) = 2^(-0.1/35) ≈ 0.998
+    // More physiologically accurate than pure Hold (never recovers) or
+    // fast decay α=0.1 (recovers in 3s, loses real fatigue state).
     // ==========================================
-    // EMA smoothing (alpha=0.1)
-    m_fatigue = m_fatigue * 0.9f + f_raw * 0.1f;
+    if (m_isContracting) {
+        m_fatigue = m_fatigue * 0.9f + f_raw * 0.1f;
+    } else {
+        // Exponential recovery: half-life ~35s (Elfving 2002)
+        m_fatigue *= 0.998f;
+    }
     if (m_fatigue < 0.0f) m_fatigue = 0.0f;
     if (m_fatigue > 100.0f) m_fatigue = 100.0f;
 
@@ -619,9 +661,10 @@ void SignalProcessor::clearCalibration() {
     m_activation = 0.0f;
     m_isContracting = false;
     m_mdfRange = 0.0f;  // 重置预计算的MDF范围
-    m_lastValidMDF = 80.0f;
+    m_lastValidMDF = 0.0f;
     m_isMdfValid = false;
     m_consecutivePhysioFrames = 0;
+    m_rmsTrendEma = 0.0f;
 }
 
 // 简化校准：获取当前实时RMS
@@ -673,9 +716,15 @@ void SignalProcessor::finalizeCalibMdf() {
         return;
     }
     
-    // 计算峰值MDF
-    m_calibMdfPeak = m_calibMdfBuffer[0];
-    for (uint16_t i = 1; i < m_calibMdfCount; i++) {
+    // 计算峰值MDF — 跳过前2秒（20帧@10Hz）的瞬态期数据
+    // 收缩刚开始时信号未稳定，FFT易产生高频伪峰（如150+Hz噪声尖峰）
+    // 跳过瞬态期后取峰值，消除噪声尖峰对锚点的污染
+    uint16_t transientSkip = 20;  // 2秒 @ 10Hz
+    if (m_calibMdfCount <= transientSkip) {
+        transientSkip = 0;  // 数据不足时不禁用跳过
+    }
+    m_calibMdfPeak = m_calibMdfBuffer[transientSkip];
+    for (uint16_t i = transientSkip + 1; i < m_calibMdfCount; i++) {
         if (m_calibMdfBuffer[i] > m_calibMdfPeak) {
             m_calibMdfPeak = m_calibMdfBuffer[i];
         }
@@ -727,6 +776,7 @@ void SignalProcessor::resetEMA() {
     m_lastValidMDF = 0.0f;  // 80.0f→0.0f：防止findMedianFrequency fallback自引用锁死
     m_consecutivePhysioFrames = 0;
     m_currentMDF = 0.0f;
+    m_rmsTrendEma = 0.0f;
 }
 
 float SignalProcessor::getMDF() const { return m_currentMDF; }

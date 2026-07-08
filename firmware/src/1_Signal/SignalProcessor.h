@@ -107,6 +107,7 @@ private:
     float m_activeRMS_mV;
     float m_relaxMDF_hz;
     float m_activeMDF_hz;         // 校准Active阶段峰值MDF，疲劳度锚点公式分母
+    float m_mdfRange;             // 预计算的MDF范围 = activeMDF - relaxMDF，避免重复计算
     bool m_isCalibrated;
     bool m_isContracting;
 

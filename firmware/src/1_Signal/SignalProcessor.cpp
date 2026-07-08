@@ -40,6 +40,7 @@ SignalProcessor::SignalProcessor() :
     m_relaxRMS_mV(0.0f), m_activeRMS_mV(0.0f),  // 0=未校准,避免默认计算出100%activation
     m_relaxMDF_hz(100.0f),
     m_activeMDF_hz(100.0f),
+    m_mdfRange(0.0f),
     m_isCalibrated(false),
     m_isContracting(false),
     m_currentMDF(50.0f), m_lastValidMDF(50.0f), m_isMdfValid(false),
@@ -545,9 +546,8 @@ void SignalProcessor::updateFatigue(float rms, float mdf) {
     //   F = (activeMDF - currentMDF) / (activeMDF - relaxMDF) × 100%
     //   0% = fresh contraction, 100% = fatigued to near-relax level
     float f_raw = 0.0f;
-    if (m_isContracting && m_activeMDF_hz > m_relaxMDF_hz + 5.0f) {
-        float range = m_activeMDF_hz - m_relaxMDF_hz;
-        f_raw = (m_activeMDF_hz - mdf) / range * 100.0f;
+    if (m_isContracting && m_mdfRange > 5.0f) {
+        f_raw = (m_activeMDF_hz - mdf) / m_mdfRange * 100.0f;
         f_raw = constrain(f_raw, 0.0f, 100.0f);
     }
     // ========== Fatigue Formula ==========
@@ -607,6 +607,7 @@ void SignalProcessor::setCalibration(float relaxRMS_mV, float activeRMS_mV, floa
     m_activeRMS_mV = activeRMS_mV;
     m_relaxMDF_hz = relaxMDF_hz;
     m_activeMDF_hz = activeMDF_hz;
+    m_mdfRange = activeMDF_hz - relaxMDF_hz;  // 预计算MDF范围，避免updateFatigue()重复计算
     m_isCalibrated = true;
     LOG("[SIG] Calibration set: relax_rms=%.3f active_rms=%.3f relax_mdf=%.1f active_mdf=%.1f\n",
         relaxRMS_mV, activeRMS_mV, relaxMDF_hz, activeMDF_hz);
@@ -617,6 +618,7 @@ void SignalProcessor::clearCalibration() {
     m_fatigue = 0.0f;
     m_activation = 0.0f;
     m_isContracting = false;
+    m_mdfRange = 0.0f;  // 重置预计算的MDF范围
     m_lastValidMDF = 80.0f;
     m_isMdfValid = false;
     m_consecutivePhysioFrames = 0;

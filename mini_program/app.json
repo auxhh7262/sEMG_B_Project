@@ -8,7 +8,7 @@
   "window": {
     "backgroundTextStyle": "light",
     "navigationBarBackgroundColor": "#1a1a1a",
-    "navigationBarTitleText": "sEMG肌肉疲劳监测",
+    "navigationBarTitleText": "sEMG疲劳预警腕带",
     "navigationBarTextStyle": "white"
   },
   "tabBar": {

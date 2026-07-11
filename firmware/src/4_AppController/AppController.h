@@ -28,6 +28,9 @@ public:
     void handleResetCalib();
     void handleRecordRelax();
     void handleRecordActive();
+    // 阶段3：应用云端纵向画像精炼基线（覆盖并持久化为新的校准）
+    void handleApplyProfile(float relaxRms, float activeRms,
+                            float relaxMdf, float activeMdf, float endMdf);
 
 private:
     void _handleRunningState(float rms, float mdf, float fatigue,

@@ -24,7 +24,7 @@ for f in files:
                             if '收缩起始-当前' in new:
                                 new = new.replace('收缩起始-当前', 'Active峰值MDF-当前MDF')
                             if '收缩起始MDF×100%' in new:
-                                new = new.replace('收缩起始MDF×100%', '(Active峰值MDF-静息MDF)×100%')
+                                new = new.replace('收缩起始MDF×100%', '(Active峰值MDF-用力末MDF)×100%')
                             if '收缩起始' in new and 'MDF' in new:
                                 new = new.replace('收缩起始', 'Active峰值')
                             if new != old:

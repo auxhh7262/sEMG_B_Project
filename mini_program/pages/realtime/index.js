@@ -255,15 +255,20 @@ Page({
     // 未佩戴/开路：固件已将质量分压到极低(3%)，直接用 quality 阈值判断
     // quality 缺失(旧数据)时默认视为已佩戴，避免误弹横幅
     const worn = pt.quality == null ? true : pt.quality >= 30;
+    // 未校准（固件 m_isCalibrated=false，或云端校准已删除）：激活度/疲劳度无法计算，
+    // 与"未佩戴"同口径统一显示 '--'；rms/mdf 为原始信号仍正常显示。
+    // 旧数据缺 calibrated 字段时默认 true，避免历史已校准数据误显 '--'。
+    const calibrated = pt.calibrated === false ? false : true;
+    const hideCalib = (!worn) || (!calibrated);
 
     return {
       time: timeStr,
       rms: (pt.rms || 0).toFixed(3),
-      // 未佩戴：激活度与疲劳度一同隐藏，用 '--' 占位（保持口径统一）
-      act: (!worn) ? '--' : (actPct != null ? actPct.toFixed(1) + '%' : '--'),
+      // 未佩戴/未校准：激活度隐藏，用 '--' 占位（保持口径统一）
+      act: (!hideCalib) ? (actPct != null ? actPct.toFixed(1) + '%' : '--') : '--',
       mdf: (pt.mdf || 0).toFixed(1),
-      // 未佩戴：不显示虚假疲劳度/激活度，用 '--' 占位
-      fat: (!worn) ? '--' : (fatPct != null ? fatPct.toFixed(1) + '%' : '--'),
+      // 未佩戴/未校准：不显示虚假疲劳度/激活度，用 '--' 占位
+      fat: (!hideCalib) ? (fatPct != null ? fatPct.toFixed(1) + '%' : '--') : '--',
       // 未佩戴：质量列提示佩戴状态
       q: (!worn) ? '请佩戴' : (pt.quality != null ? pt.quality + '%' : '--'),
       worn: worn

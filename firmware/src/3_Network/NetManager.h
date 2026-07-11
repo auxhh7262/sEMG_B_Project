@@ -16,6 +16,7 @@
 #define CLOUD_URL_ACK_COMMAND       "http://" CLOUD_BASE_DOMAIN "/ackDeviceCommand"
 #define CLOUD_URL_UPLOAD_CALIB      "http://" CLOUD_BASE_DOMAIN "/uploadCalibration"
 #define CLOUD_URL_UPLOAD_STATS      "http://" CLOUD_BASE_DOMAIN "/uploadStats"
+#define CLOUD_URL_GET_PROFILE       "http://" CLOUD_BASE_DOMAIN "/getProfile"
 
 // 上传参数
 #define INGEST_BATCH_FRAMES    10    // 每批上传帧数 (1秒 @ 10Hz)
@@ -32,7 +33,7 @@ public:
     void tick();
     // 上传timestamp_sec（NTP同步的Unix秒数），云端转换为毫秒
     bool pushDataPoint(float rms, float act, float mdf,
-                       float fatigue, uint8_t quality);
+                       float fatigue, uint8_t quality, bool calibrated);
     void uploadCalibration(float relaxRms, float relaxMdf,
                            float activeRms, float activeMdf);
     void uploadCalibPhase(const char* phase, float rms, float mdf,
@@ -62,11 +63,18 @@ public:
     void onSaveCalib(void (*cb)(const char* params)) { _onSaveCalib = cb; }
     void onResetCalib(void (*cb)()) { _onResetCalib = cb; }
 
+    // 阶段3：云端纵向画像回灌回调（固件启动拉取精炼基线后应用）
+    void onProfile(void (*cb)(float relaxRms, float activeRms,
+                              float relaxMdf, float activeMdf, float endMdf)) { _onProfile = cb; }
+    void fetchProfile();
+
 private:
     void _wifiTick();
     void _checkIngest();
     bool _httpPost(const char* url, const char* jsonBody);
     bool _httpPost(const char* url, const char* jsonBody, String* outBody);
+    bool _httpGet(const char* url, String* outBody);
+    float _parseFloatField(const String& body, const char* key);
     void _genDeviceId(char* buf, size_t len);
 
     bool _wifiConnected;
@@ -86,6 +94,7 @@ private:
         uint16_t ms;             // 真实毫秒（0-999）
         float rms, act, mdf, fatigue;
         uint8_t quality;
+        bool calibrated;   // 该数据点对应的校准状态快照（固件 m_isCalibrated）
     };
     DataPoint _batchBuffer[INGEST_BATCH_FRAMES];
     uint8_t _batchCount;
@@ -137,6 +146,8 @@ private:
     void (*_onRecordActive)();
     void (*_onSaveCalib)(const char* params);
     void (*_onResetCalib)();
+    void (*_onProfile)(float, float, float, float, float);
+    bool _profileFetched;       // 阶段3：确保启动后仅拉取一次画像
     char _lastParams[128];
     uint32_t _wifiDisconnectedSince;
 };

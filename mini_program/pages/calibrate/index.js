@@ -342,7 +342,7 @@ Page({
     // setData 已清空页面显示变量，不影响新校准的展示
     this.setData({
       phase: 'relax',
-      statusText: '请保持放松...',
+      statusText: '请保持和用力阶段同样的握持姿态放松、不出力（两个阶段手势一致）...',
       liveRelaxRms: null,
       liveRelaxMdf: null,
       relaxRms: null,
@@ -378,7 +378,7 @@ Page({
 
     this.setData({
       phase: 'active_contract',
-      statusText: '请全力握紧拳头，保持15秒！',
+      statusText: '请保持和真实使用时一样的握持姿态与力度，用你平时真实的劲握紧，保持15秒！（别凭空使劲，握什么、怎么握都照真实场景）',
       liveActiveRms: null,
       liveActiveMdf: null,
     });
@@ -611,7 +611,7 @@ Page({
             relaxRms: relax_rms,
             relaxMdf: relax_mdf || 0,
             phase: 'active_ready',
-            statusText: '放松校准完成，请握紧拳头至最大力，准备好了就点击下方按钮',
+            statusText: '放松校准完成，请保持同一握拳姿态，握紧拳头至最大力，准备好了就点击下方按钮',
           });
           this._stopPolling();
           return;

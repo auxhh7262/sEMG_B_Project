@@ -34,6 +34,6 @@
   "cloudfunctionRoot": "cloudfunctions/",
   "editorSetting": {},
   "libVersion": "3.15.2",
-  "projectname": "sEMG肌肉疲劳监测",
+  "projectname": "sEMG疲劳预警腕带",
   "cloudfunctionTemplateRoot": "cloudfunctionTemplate/"
 }

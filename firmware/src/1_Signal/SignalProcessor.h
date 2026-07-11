@@ -65,7 +65,8 @@ public:
     float getActivation() const;
 
     // 校准接口
-    void setCalibration(float relaxRMS_mV, float activeRMS_mV, float relaxMDF_hz, float activeMDF_hz);
+    void setCalibration(float relaxRMS_mV, float activeRMS_mV,
+                        float relaxMDF_hz, float activeMDF_hz, float endMDF_hz);
     void clearCalibration();
     bool isCalibrated() const { return m_isCalibrated; }
     float getRelaxRms() const { return m_relaxRMS_mV; }
@@ -138,10 +139,22 @@ private:
     float m_activeRMS_mV;
     float m_relaxMDF_hz;
     float m_activeMDF_hz;         // 校准Active阶段峰值MDF，疲劳度锚点公式分母
-    float m_mdfRange;             // 预计算的MDF范围 = activeMDF - relaxMDF，避免重复计算
+    float m_mdfRange;             // 预计算的MDF范围 = activeMDF - fatigueFloor，避免重复计算
+    float m_endMDF_hz;            // 个人疲劳下限锚点（校准 end_mdf）：F=100% 对应 MDF 跌到此值
+    // 原始校准参考（不可在线改写）：约束在线学习的漂移边界，作为安全锚
+    float m_calibRelaxRMS_mV;
+    float m_calibActiveRMS_mV;
+    float m_calibRelaxMDF_hz;
+    float m_calibActiveMDF_hz;
+    float m_calibEndMDF_hz;
+    uint32_t m_restFrames;        // 静息持续帧计数（在线自校正 gate）
+    float m_recoveryFactor;       // 学习到的放松期恢复因子（替换固定 0.998）
     uint32_t m_calibTimestampMs;  // 校准完成时间戳（ms），用于限制动态锚点更新窗口
     bool m_isCalibrated;
     bool m_isContracting;
+    bool m_contractConfident;   // 收缩状态去抖后的稳定态（Phase3 收缩门控）
+    uint32_t m_contractDebounce; // 进入收缩态所需的连续确认帧计数
+    uint32_t m_contractExitCnt;  // 退出收缩态所需的连续非收缩帧计数
     bool m_signalInvalid;       // 电极开路/未佩戴标志（50Hz工频能量超限）
     uint8_t m_invalidFrames;    // 连续异常帧计数（进入开路去抖，防误判）
     uint8_t m_validFrames;      // 连续正常帧计数（退出开路去抖/滞回）
@@ -203,6 +216,7 @@ private:
     float calculateRMS();
     void takeSnapshotIfNeeded(uint16_t window_size);
     void updateFatigue(float rms, float mdf);
+    void _recomputeMdfRange();    // 依 end_mdf(优先)/relax_mdf 计算疲劳公式分母范围
     void evaluateSignalQuality(float rms, float mdf);
     uint16_t safeGetStartIndex(uint16_t window_size);
 

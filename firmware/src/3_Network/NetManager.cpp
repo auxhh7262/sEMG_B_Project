@@ -27,6 +27,8 @@ NetManager::NetManager()
     , _onRecordActive(nullptr)
     , _onSaveCalib(nullptr)
     , _onResetCalib(nullptr)
+    , _onProfile(nullptr)
+    , _profileFetched(false)
     , _wifiDisconnectedSince(0)
     , _bleOpened(false)
     , _provisioningActive(false)
@@ -304,7 +306,7 @@ void NetManager::_wifiTick() {
 
 // 记录NTP时间戳（0表示未同步），云端fallback到服务器时间
 bool NetManager::pushDataPoint(float rms, float act,
-                                float mdf, float fatigue, uint8_t quality) {
+                                float mdf, float fatigue, uint8_t quality, bool calibrated) {
     // NTP未同步时跳过上传，避免时间戳为0的脏数据
     if (!_timeSynced) {
         return false;
@@ -342,6 +344,7 @@ bool NetManager::pushDataPoint(float rms, float act,
         _retryQueue[idx].mdf = mdf;
         _retryQueue[idx].fatigue = fatigue;
         _retryQueue[idx].quality = quality;
+        _retryQueue[idx].calibrated = calibrated;
         _retryCount++;
     }
 
@@ -353,6 +356,7 @@ bool NetManager::pushDataPoint(float rms, float act,
         _batchBuffer[_batchCount].mdf = mdf;
         _batchBuffer[_batchCount].fatigue = fatigue;
         _batchBuffer[_batchCount].quality = quality;
+        _batchBuffer[_batchCount].calibrated = calibrated;
         _batchCount++;
         return true;
     }
@@ -375,16 +379,18 @@ void NetManager::_checkIngest() {
 
     for (uint8_t i = 0; i < _batchCount; i++) {
         if (i > 0) pos += snprintf(_jsonBuf + pos, sizeof(_jsonBuf) - pos, ",");
-        // 格式: [timestamp_sec, ms, rms, act, mdf, fatigue, quality]
+        // 格式: [timestamp_sec, ms, rms, act, mdf, fatigue, quality, calibrated]
+        //   calibrated: 1=已校准 0=未校准；云端据其决定"未校准"时激活度/疲劳度显示 '--'
         pos += snprintf(_jsonBuf + pos, sizeof(_jsonBuf) - pos,
-                 "[%lu,%u,%.3f,%.1f,%.1f,%.1f,%u]",
+                 "[%lu,%u,%.3f,%.1f,%.1f,%.1f,%u,%d]",
                  (unsigned long)_batchBuffer[i].timestamp_sec,
                  (unsigned)_batchBuffer[i].ms,
                  _batchBuffer[i].rms,
                  _batchBuffer[i].act,
                  _batchBuffer[i].mdf,
                  _batchBuffer[i].fatigue,
-                 _batchBuffer[i].quality);
+                 (unsigned)_batchBuffer[i].quality,
+                 _batchBuffer[i].calibrated ? 1 : 0);
     }
     snprintf(_jsonBuf + pos, sizeof(_jsonBuf) - pos, "]}");
 
@@ -551,6 +557,140 @@ bool NetManager::_httpPost(const char* url, const char* jsonBody, String* outBod
     return false;
 }
 
+// ==================== HTTP GET — 阶段3 画像拉取 ====================
+// 与 _httpPost 同构，但用 GET 且无请求体（Content-Length 省略）。
+bool NetManager::_httpGet(const char* url, String* outBody) {
+    const char* hostStart = url + 7;  // skip "http://"
+    const char* pathStart = strchr(hostStart, '/');
+    char host[128];
+    int hostLen;
+    if (pathStart) {
+        hostLen = pathStart - hostStart;
+        if (hostLen > 127) hostLen = 127;
+        memcpy(host, hostStart, hostLen);
+        host[hostLen] = '\0';
+    } else {
+        strncpy(host, hostStart, 127);
+        host[127] = '\0';
+        pathStart = "/";
+    }
+
+    char reqHeader[256];
+    int hdrLen = snprintf(reqHeader, sizeof(reqHeader),
+        "GET %s HTTP/1.0\r\n"
+        "Host: %s\r\n"
+        "User-Agent: sEMG-FW/3.2\r\n"
+        "Accept: application/json\r\n"
+        "Connection: close\r\n"
+        "\r\n",
+        pathStart, host);
+
+    for (int attempt = 0; attempt < 2; attempt++) {
+        if (attempt > 0) delay(800);
+        WiFiClient client;
+        client.stop();
+        delay(30);
+        if (!client.connect(host, 80)) {
+            LOG("[NET] GET TCP connect FAIL (attempt %d)\n", attempt + 1);
+            client.stop();
+            continue;
+        }
+        size_t written = client.write((const uint8_t*)reqHeader, hdrLen);
+        if (written != (size_t)hdrLen) {
+            LOG("[NET] GET header write fail\n");
+            client.stop();
+            continue;
+        }
+        client.flush();
+        unsigned long t0 = millis();
+        String header, respBody;
+        bool headerDone = false;
+        while (millis() - t0 < 8000) {
+            if (!client.connected() && !client.available()) break;
+            while (client.available()) {
+                char c = client.read();
+                if (!headerDone) {
+                    header += c;
+                    int hLen = header.length();
+                    if (hLen >= 4 &&
+                        header[hLen-4]=='\r' && header[hLen-3]=='\n' &&
+                        header[hLen-2]=='\r' && header[hLen-1]=='\n') {
+                        headerDone = true;
+                    }
+                } else {
+                    respBody += c;
+                }
+            }
+            if (headerDone && !client.available()) break;
+        }
+        client.stop();
+        if (header.length() == 0) continue;
+        if (outBody) *outBody = respBody;
+        bool ok = (header.indexOf("200") > 0);
+        if (!ok) {
+            LOG("[NET] GET HTTP error (attempt %d)\n", attempt + 1);
+            continue;
+        }
+        return true;
+    }
+    return false;
+}
+
+// 从 JSON 响应中解析浮点字段；找不到或非法返回 -1.0f
+float NetManager::_parseFloatField(const String& body, const char* key) {
+    int idx = body.indexOf(key);
+    if (idx < 0) return -1.0f;
+    int colon = body.indexOf(':', idx);
+    if (colon < 0) return -1.0f;
+    int i = colon + 1;
+    while (i < (int)body.length() && (body[i]==' ' || body[i]=='\t')) i++;
+    if (i >= (int)body.length()) return -1.0f;
+    int start = i;
+    if (body[i]=='-') i++;
+    int digits = 0;
+    while (i < (int)body.length() && ((body[i]>='0'&&body[i]<='9') || body[i]=='.')) {
+        if (body[i]>='0'&&body[i]<='9') digits++;
+        i++;
+    }
+    if (digits == 0) return -1.0f;
+    return body.substring(start, i).toFloat();
+}
+
+// ==================== 阶段3：拉取云端精炼画像并应用 ====================
+void NetManager::fetchProfile() {
+    if (!_onProfile) return;
+    // 云端 HTTP 网关仅路由 POST（dataIngest / uploadCalibration / getDeviceCommand
+    // 均为 POST 且工作正常）；GET 会被网关以非 200 拒绝（实测：TCP 已连上但响应非 200）。
+    // 故此处复用 _httpPost（与 _checkCommand 同构），并借助其完整错误日志便于诊断。
+    char jsonBody[128];
+    snprintf(jsonBody, sizeof(jsonBody),
+             "{\"device_id\":\"%s\"}", _deviceId);
+    String respBody;
+    bool ok = _httpPost(CLOUD_URL_GET_PROFILE, jsonBody, &respBody);
+    if (!ok || respBody.length() == 0) {
+        LOG("[NET] fetchProfile: no response\n");
+        return;
+    }
+    if (respBody.indexOf("\"code\":404") >= 0 || respBody.indexOf("\"code\": 404") >= 0) {
+        LOG("[NET] fetchProfile: no profile (404)\n");
+        return;
+    }
+    float relax_rms  = _parseFloatField(respBody, "\"relax_rms\":");
+    float relax_mdf  = _parseFloatField(respBody, "\"relax_mdf\":");
+    float active_rms = _parseFloatField(respBody, "\"active_rms\":");
+    float active_mdf = _parseFloatField(respBody, "\"active_mdf\":");
+    float end_mdf    = _parseFloatField(respBody, "\"end_mdf\":");
+    // 基本校验，避免污染基线
+    if (relax_mdf <= 0 || active_mdf <= 0 || active_mdf <= relax_mdf ||
+        active_rms <= 0 || relax_rms <= 0) {
+        LOG("[NET] fetchProfile: invalid profile, skipped\n");
+        return;
+    }
+    LOG("[NET] fetchProfile: relax={%.3f,%.1f} active={%.3f,%.1f} end_mdf=%.1f\n",
+        relax_rms, relax_mdf, active_rms, active_mdf, end_mdf);
+    _onProfile(relax_rms, active_rms, relax_mdf, active_mdf, end_mdf);
+}
+
 void NetManager::uploadCalibration(float relaxRms, float relaxMdf,
                                     float activeRms, float activeMdf) {
     _relaxRms = relaxRms;
@@ -598,6 +738,12 @@ void NetManager::tick() {
     }
 
     _checkIngest();
+
+    // 阶段3：会话启动后拉取一次云端精炼画像（纵向学习），仅触发一次
+    if (_sessionActive && !_profileFetched) {
+        _profileFetched = true;
+        fetchProfile();
+    }
 
     uint32_t now = millis();
     // 命令轮询间隔：3秒（原10秒太长，导致校准指令延迟、relax阶段数据来不及显示）

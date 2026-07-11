@@ -103,7 +103,7 @@
       </view>
       <view class="help-step">
         <text class="step-num">4</text>
-        <text class="step-text"><text class="step-bold">疲劳度(%)</text> — 基于MDF锚点公式计算：(Active峰值MDF-当前MDF)/(Active峰值MDF-静息MDF)×100%，0%=无疲劳，100%=严重疲劳。放松时按指数衰减恢复（半衰期约35秒），收缩力急剧变化时降低置信度</text>
+        <text class="step-text"><text class="step-bold">疲劳度(%)</text> — 基于MDF锚点公式计算：(Active峰值MDF-当前MDF)/(Active峰值MDF-用力末MDF)×100%。0%=无疲劳，100%=达到校准用力末的真实疲劳状态。仅在稳定收缩时更新；放松/静息时冻结并按指数衰减恢复（半衰期约35秒）；收缩力急剧变化时降低置信度。电极开路时冻结显示"--"</text>
       </view>
       <view class="help-step">
         <text class="step-num">5</text>

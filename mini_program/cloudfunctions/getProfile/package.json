@@ -1,0 +1,9 @@
+{
+  "name": "getProfile",
+  "version": "1.0.0",
+  "description": "聚合历史校准 session 返回精炼个人基线（纵向学习）",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "latest"
+  }
+}

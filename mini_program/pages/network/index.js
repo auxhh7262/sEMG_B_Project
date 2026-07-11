@@ -38,6 +38,7 @@ Page({
 
   onLoad() {
     log('[Network] page loaded');
+    this._notifyBound = false;   // onBLECharacteristicValueChange 注册标志，避免重复累积
     this._initBle();
   },
 
@@ -179,7 +180,15 @@ Page({
       success: (res) => {
         log('[BLE] characteristics found:', res.characteristics.length);
 
-        // 启用 notify on result char (CHAR_RESULT)
+        // 无条件注册值变化监听：deviceId 读取与配网结果都经此回调返回。
+        // 注意：不依赖 resultChar.properties.notify 判断——微信重连后返回的
+        // characteristics 常为缓存、properties 不准，若据此跳过注册会导致 deviceId 永远读不到。
+        if (!this._notifyBound) {
+          wx.onBLECharacteristicValueChange(this._onNotify.bind(this));
+          this._notifyBound = true;
+        }
+
+        // 启用 result char 的 notify（支持则启用；不支持也不影响 deviceId 读取）
         const resultChar = res.characteristics.find(
           c => c.uuid.toUpperCase() === CHAR_RESULT
         );
@@ -190,21 +199,20 @@ Page({
             success: () => log('[BLE] notify enabled on result char'),
             fail: (err) => warn('[BLE] notify enable fail:', err)
           });
-          wx.onBLECharacteristicValueChange(this._onNotify.bind(this));
         }
 
-        // 读取 deviceId (CHAR_DEVICE_ID)
+        // 读取 deviceId：用 read 同步读取（立即收回调，不依赖 notify 推送的时机与值变化）。
+        // 监听已在上方无条件注册，read 结果经 _onNotify 返回。不依赖 properties.read 判断
+        // （微信重连后 properties 可能不准），无条件发起 read。
         const devIdChar = res.characteristics.find(
           c => c.uuid.toUpperCase() === CHAR_DEVICE_ID
         );
-        if (devIdChar && devIdChar.properties.read) {
-          wx.readBLECharacteristicValue({
-            deviceId, serviceId, characteristicId: devIdChar.uuid,
-            success: () => log('[BLE] reading deviceId...'),
-            fail: (err) => warn('[BLE] read deviceId fail:', err)
-          });
-          // Wait for onBLECharacteristicValueChange with deviceId
-        }
+        wx.readBLECharacteristicValue({
+          deviceId, serviceId,
+          characteristicId: devIdChar ? devIdChar.uuid : CHAR_DEVICE_ID,
+          success: () => log('[BLE] reading deviceId...'),
+          fail: (err) => warn('[BLE] read deviceId fail:', err)
+        });
 
         this.setData({
           connected: true,

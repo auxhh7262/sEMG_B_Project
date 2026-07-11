@@ -117,6 +117,13 @@ static void _onCloudResetCalib() {
     gAppController.handleResetCalib();
 }
 
+// 阶段3：云端纵向画像拉取成功后应用
+static void _onCloudProfile(float relaxRms, float activeRms,
+                             float relaxMdf, float activeMdf, float endMdf) {
+    LOG("[MAIN] Cloud profile applied\n");
+    gAppController.handleApplyProfile(relaxRms, activeRms, relaxMdf, activeMdf, endMdf);
+}
+
 // WiFi 凭证配网处理 — 非阻塞状态机
 static bool     _besConnecting = false;
 static uint32_t _besConnectStart = 0;
@@ -221,6 +228,11 @@ void setup() {
     // 4. 网络初始化（WiFi 已配置则连接，否则后续进入配网模式）
     bool netOk = gNetManager.initBlocking(15000);
 
+    // 无论 WiFi 是否连接成功，都把 deviceId 写入 BLE（MAC 已在 init 内生成，
+    // 配网模式下小程序也需要能读到此 ID；之前误放进 if(netOk) 导致 provisioning 时
+    // _deviceId 始终为空，deviceId 读不出来）
+    gBleConfig.setDeviceId(gNetManager.getDeviceId());
+
     // 注册回调
     gNetManager.onResetWifi(_onCloudResetWifi);
     gNetManager.onWifiLostTimeout(_onWifiLostTimeout);
@@ -229,10 +241,9 @@ void setup() {
     gNetManager.onRecordActive(_onCloudRecordActive);
     gNetManager.onSaveCalib(_onCloudSaveCalib);
     gNetManager.onResetCalib(_onCloudResetCalib);
+    gNetManager.onProfile(_onCloudProfile);
 
     if (netOk) {
-        // 设置 deviceId 到 BLE
-        gBleConfig.setDeviceId(gNetManager.getDeviceId());
         gBleConfig.stopProvisioning();
 
         // NTP同步成功后启动会话

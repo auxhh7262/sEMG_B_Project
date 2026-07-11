@@ -23,8 +23,11 @@
 // 实测：开路 50Hz RMS≈500-1500mV，佩戴静息≈5-8mV，重新佩戴过渡瞬间瞬态≈20-40mV。
 // 阈值取 80mV：既消除重新佩戴时 2 行短暂"请佩戴"闪动，又离开路 500mV 余量极大，
 // 不影响开路检测（原 40mV 会把过渡瞬态误判为开路）。
-#ifndef MAINS_OPEN_THRESHOLD_MV
-#define MAINS_OPEN_THRESHOLD_MV 80.0f
+#ifndef MAINS_OPEN_ENTER_MV
+#define MAINS_OPEN_ENTER_MV 700.0f   // 进入开路：高于佩戴实测工频上界(~600mV)留裕度
+#endif
+#ifndef MAINS_OPEN_EXIT_MV
+#define MAINS_OPEN_EXIT_MV 400.0f    // 退出开路：低于真开路实测下界(~800mV)留裕度
 #endif
 
 // ==================== 调试日志宏（已修复快捷键缺失问题）====================
@@ -76,7 +79,15 @@ SignalProcessor::SignalProcessor() :
     m_calibMdfCount(0),
     m_calibMdfPeak(0.0f),
     m_calibMdfEnd(0.0f),
-    m_mainsPowerEma(0.0f), m_mainsRms(0.0f)
+    m_mainsPowerEma(0.0f), m_mainsRms(0.0f),
+    m_endMDF_hz(0.0f),
+    m_calibRelaxRMS_mV(0.0f), m_calibActiveRMS_mV(0.0f),
+    m_calibRelaxMDF_hz(0.0f), m_calibActiveMDF_hz(0.0f), m_calibEndMDF_hz(0.0f),
+    m_restFrames(0),
+    m_recoveryFactor(0.998f),
+    m_contractConfident(false),
+    m_contractDebounce(0),
+    m_contractExitCnt(0)
 {
     memset(m_ringBuffer, 0, sizeof(m_ringBuffer));
     memset(m_fftInputBuffer, 0, sizeof(m_fftInputBuffer));
@@ -92,6 +103,9 @@ void SignalProcessor::init() {
     m_writeIndex = 0; m_readIndex = 0;
     m_fatigue = 0.0f; m_activation = 0.0f;     m_isCalibrated = false;
     m_isContracting = false;
+    m_contractConfident = false;
+    m_contractDebounce = 0;
+    m_contractExitCnt = 0;
     m_signalInvalid = false;
     m_invalidFrames = 0;
     m_validFrames = 0;
@@ -598,6 +612,7 @@ void SignalProcessor::evaluateSignalQuality(float rms, float mdf) {
 void SignalProcessor::updateFatigue(float rms, float mdf) {
     if (mdf <= 0.0f) {
         m_fatigue = 0.0f; m_activation = 0.0f; m_isContracting = false;
+        m_contractConfident = false; m_contractDebounce = 0; m_contractExitCnt = 0;
         return;
     }
 
@@ -611,6 +626,7 @@ void SignalProcessor::updateFatigue(float rms, float mdf) {
     //   也绝不让虚假100%疲劳跳出来。
     if (m_signalInvalid || m_invalidFrames > 0) {
         m_isContracting = false;
+        m_contractConfident = false; m_contractDebounce = 0; m_contractExitCnt = 0;
         m_activation = 0.0f;
         if (m_fatigue > 100.0f) m_fatigue = 100.0f;
         if (m_fatigue < 0.0f) m_fatigue = 0.0f;
@@ -632,7 +648,24 @@ void SignalProcessor::updateFatigue(float rms, float mdf) {
     // MDF may drop close to relaxMDF, causing contraction detection to fail
     float activeThreshold = m_activeRMS_mV * 0.3f;  // 30% of max contraction as floor
     float absThreshold = max(activeThreshold, 10.0f);  // Minimum 10mV for noise rejection
-    m_isContracting = (rms > m_relaxRMS_mV * 2.0f) && (rms > absThreshold);
+    bool rawContract = (rms > m_relaxRMS_mV * 2.0f) && (rms > absThreshold);
+
+    // ===== 收缩状态去抖（Phase 3 收缩门控）=====
+    // 问题：放松瞬间 MDF 残余偏高 + 阈值边界帧偶发 rawContract=true，会被误判为收缩
+    //       并用 MDF 公式算出偏高的 f_raw，导致疲劳虚高（静息假疲劳）。
+    // 修复：进入收缩态需连续 2 帧 rawContract 确认；退出需连续 5 帧非收缩确认。
+    //       去抖后的稳定态 m_contractConfident 才驱动疲劳的 MDF 计算；
+    //       非收缩态绝不读 MDF（只走恢复衰减），消除静息假疲劳。
+    if (rawContract) {
+        m_contractDebounce++;
+        m_contractExitCnt = 0;
+        if (m_contractDebounce >= 2) m_contractConfident = true;
+    } else {
+        m_contractDebounce = 0;
+        m_contractExitCnt++;
+        if (m_contractExitCnt >= 5) m_contractConfident = false;
+    }
+    m_isContracting = m_contractConfident;
 
     // RMS trend EMA for force-change confound detection
     // Phinyomark et al. (2012): MDF changes with contraction force level,
@@ -651,21 +684,27 @@ void SignalProcessor::updateFatigue(float rms, float mdf) {
     }
 
     // Fatigue: anchor formula using calibration reference points
-    //   F = (activeMDF - currentMDF) / (activeMDF - relaxMDF) × 100%
-    //   0% = fresh contraction, 100% = fatigued to near-relax level
+    //   F = (activeMDF - currentMDF) / (activeMDF - endMDF) × 100%
+    //   0% = fresh contraction, 100% = fatigued to personal end_mdf (calibrated fatigue floor)
+    //   end_mdf 无效时回退 relaxMDF（见 _recomputeMdfRange）
     float f_raw = 0.0f;
     if (m_isContracting && m_mdfRange > 5.0f) {
-        // Dynamic anchor update: if current MDF exceeds calibration peak,
-        // update activeMDF to prevent fatigue from being clamped to 0
-        // This handles cases where user didn't reach max contraction during calibration
-        // Limited to first 30 seconds after calibration to prevent mid-session drift
-        const uint32_t ANCHOR_UPDATE_WINDOW_MS = 30000;  // 30秒窗口
-        if (mdf > m_activeMDF_hz && mdf > m_relaxMDF_hz + 10.0f) {
-            uint32_t elapsed = millis() - m_calibTimestampMs;
-            if (elapsed < ANCHOR_UPDATE_WINDOW_MS) {
-                float delta = mdf - m_activeMDF_hz;
-                m_activeMDF_hz += delta * 0.1f;  // EMA update, slow convergence
-                m_mdfRange = m_activeMDF_hz - m_relaxMDF_hz;
+        // 在线最大用力锚点修正（Phase 2）：仅当肌肉尚新鲜（当前疲劳度低）时，
+        // 才把观测到的更高峰值采纳为"真实最大收缩"，修正校准用力不足。
+        // 用"疲劳度<阈值"替代原"校准后30s"窗口：疲劳上来后 MDF 下降，
+        // 此时观测峰值偏低，若采纳会把锚点改低、越改越错，故仅在新鲜态更新。
+        if (m_fatigue < 25.0f) {
+            // MDF 超过校准峰值 → 慢抬 activeMDF（钳上限 400Hz）
+            if (mdf > m_activeMDF_hz && mdf > m_relaxMDF_hz + 10.0f) {
+                m_activeMDF_hz += (mdf - m_activeMDF_hz) * 0.05f;
+                if (m_activeMDF_hz > 400.0f) m_activeMDF_hz = 400.0f;
+                _recomputeMdfRange();
+            }
+            // RMS 超过校准峰值 → 慢抬 activeRMS（约束在 calib 参考 0.8~1.5 倍内）
+            if (rms > m_activeRMS_mV * 1.05f) {
+                float newActive = m_activeRMS_mV * 0.95f + rms * 0.05f;
+                newActive = constrain(newActive, m_calibActiveRMS_mV * 0.8f, m_calibActiveRMS_mV * 1.5f);
+                m_activeRMS_mV = newActive;
             }
         }
         f_raw = (m_activeMDF_hz - mdf) / m_mdfRange * 100.0f;
@@ -687,6 +726,32 @@ void SignalProcessor::updateFatigue(float rms, float mdf) {
             }
         }
         f_raw *= forceStability;
+    }
+
+    // ===== 静息基线在线自校正（Phase 1）=====
+    // 确认处于真实静息态（非收缩、接近/低于当前 relax 基线、RMS 稳定）持续若干秒后，
+    // 用极慢 EMA 把 relax_rms/relax_mdf 拉向观测静息值，自校正校准误差。
+    // 安全约束：以 calib 参考的 0.6~1.4 倍为硬边界，绝不在收缩期更新，
+    // 避免基线漂移导致疲劳/激活失真（保留固定 calib_* 作安全锚）。
+    if (!m_isContracting) {
+        bool stable = (m_rmsTrendEma > 0.01f) &&
+                      (fabs(rms - m_rmsTrendEma) < m_relaxRMS_mV * 0.15f);
+        if (rms < m_relaxRMS_mV * 1.2f && stable) {
+            m_restFrames++;
+            const uint32_t REST_ADAPT_FRAMES = 50;  // ~5s @10Hz
+            if (m_restFrames >= REST_ADAPT_FRAMES) {
+                const float a = 0.02f;  // 极慢 EMA
+                float newRelaxRms = m_relaxRMS_mV * (1.0f - a) + rms * a;
+                float newRelaxMdf = m_relaxMDF_hz * (1.0f - a) + mdf * a;
+                newRelaxRms = constrain(newRelaxRms, m_calibRelaxRMS_mV * 0.6f, m_calibRelaxRMS_mV * 1.4f);
+                newRelaxMdf = constrain(newRelaxMdf, m_calibRelaxMDF_hz * 0.6f, m_calibRelaxMDF_hz * 1.4f);
+                m_relaxRMS_mV = newRelaxRms;
+                m_relaxMDF_hz = newRelaxMdf;
+                m_restFrames = 0;  // 收敛一步后重新计数，避免连续累积
+            }
+        } else {
+            m_restFrames = 0;
+        }
     }
     // ========== Fatigue Formula ==========
     // 疲劳指数: FI = (activeMDF - currentMDF) / (activeMDF - relaxMDF) × 100%
@@ -719,13 +784,23 @@ void SignalProcessor::updateFatigue(float rms, float mdf) {
     //   factor = 2^(-Δt / half_life) = 2^(-0.1/35) ≈ 0.998
     // More physiologically accurate than pure Hold (never recovers) or
     // fast decay α=0.1 (recovers in 3s, loses real fatigue state).
+    // [Phase 2] 该 factor 已改为个人化学习值 m_recoveryFactor（默认0.998，
+    //   钳制在半衰期20~60s对应区间 0.9965~0.9989），从放松期实测衰减率 EMA 估计。
     // ==========================================
     if (m_isContracting) {
         if (f_raw < 0.0f) f_raw = 0.0f;
         m_fatigue = m_fatigue * 0.7f + f_raw * 0.3f;
     } else {
-        // Exponential recovery: half-life ~35s (Elfving 2002)
-        m_fatigue *= 0.998f;
+        // 个人恢复半衰期（Phase 2）：用学习到的 recoveryFactor 替代固定 0.998。
+        // 在放松期根据观测衰减率估计个人恢复速度，钳制在半衰期 20~60s 对应因子区间。
+        float fatigueBefore = m_fatigue;
+        m_fatigue *= m_recoveryFactor;
+        if (fatigueBefore > 1.0f && m_fatigue > 0.5f) {
+            float obs = m_fatigue / fatigueBefore;  // <1，本帧实际衰减比
+            // 半衰期20s→2^(-0.1/20)=0.99653；60s→2^(-0.1/60)=0.99884
+            m_recoveryFactor = constrain(m_recoveryFactor * 0.9f + obs * 0.1f,
+                                         0.9965f, 0.9989f);
+        }
     }
     if (m_fatigue < 0.0f) m_fatigue = 0.0f;
     if (m_fatigue > 100.0f) m_fatigue = 100.0f;
@@ -756,25 +831,29 @@ float SignalProcessor::update() {
     // 修复根因：原逻辑用 MDF 中位数∈[40,60]Hz 判开路，但弱信号下 50Hz 干扰主导
     //   频谱，开路与佩戴静息的 MDF 都≈50Hz，导致佩戴时只要 rms>30 就误报"未佩戴"。
     // 现改为直接度量被陷波移除的工频总能量（m_mainsRms，单位 mV，50Hz+60Hz 合并）：
-    //   开路——电极悬空，工频共模干扰极强（RMS≈500-1500mV）；
-    //   佩戴——人体/放大器 CMRR 抑制，工频能量极小（RMS≈5-8mV）。
-    //   两者相差 ~100 倍，判别干净，且不再依赖被污染的 MDF。
+    //   开路——电极悬空，工频共模干扰极强（RMS≈800-1340mV，实测）；
+    //   佩戴——强 50Hz 环境下 CMRR 抑制有限，工频能量仍可达 ~130-600mV（实测）。
+    //   两者实测区间存在 ~600-800mV 干净间隙，用双阈值滞回区分（见下）。
     // 注意：m_mainsRms 由 ISR 实时计算，此处直接读取（volatile 保证可见性）
-    // 非对称滞回：稳态标志 m_signalInvalid 需连续 3 帧确认才进入、连续 5 帧才退出
-    //            但输出冻结（质量/疲劳）从第 1 帧疑似即生效，见 evaluateSignalQuality/updateFatigue
+    // 双阈值滞回：进入开路用 MAINS_OPEN_ENTER_MV(700)，退出用 MAINS_OPEN_EXIT_MV(400)，
+    //            中间带(400-700mV)维持原状态防临界抖动；输出冻结从第 1 帧疑似即生效。
     float mainsRms = m_mainsRms;  // 读一次 volatile，避免多次重读
-    bool mainsStrong = (mainsRms > MAINS_OPEN_THRESHOLD_MV);
-    if (mainsStrong) {
-        // 进入开路：工频能量持续超阈，连续 3 帧确认稳态标志
+    // 双阈值滞回：进入开路用较高阈值(700mV)，退出用较低阈值(400mV)，
+    // 中间带(400~700mV)维持原状态，避免临界区抖动。
+    bool mainsOpen = (mainsRms > MAINS_OPEN_ENTER_MV);
+    bool mainsClosed = (mainsRms < MAINS_OPEN_EXIT_MV);
+    if (mainsOpen) {
+        // 进入开路：工频能量持续超进入阈，连续 3 帧确认稳态标志
         m_invalidFrames++;
         m_validFrames = 0;
         if (m_invalidFrames >= 3) m_signalInvalid = true;
-    } else {
-        // 退出开路：工频能量持续低于阈，连续 5 帧确认后才清除稳态标志
+    } else if (mainsClosed) {
+        // 退出开路：工频能量持续低于退出阈，连续 5 帧确认后才清除稳态标志
         m_invalidFrames = 0;
         m_validFrames++;
         if (m_validFrames >= 5) m_signalInvalid = false;
     }
+    // else: 处于滞回带(EXIT<=rms<=ENTER)，维持现状，不增不减
 
     evaluateSignalQuality(rms, mdf);
     updateFatigue(rms, mdf);
@@ -782,16 +861,38 @@ float SignalProcessor::update() {
     return rms;
 }
 
-void SignalProcessor::setCalibration(float relaxRMS_mV, float activeRMS_mV, float relaxMDF_hz, float activeMDF_hz) {
+void SignalProcessor::setCalibration(float relaxRMS_mV, float activeRMS_mV,
+                                      float relaxMDF_hz, float activeMDF_hz, float endMDF_hz) {
     m_relaxRMS_mV = relaxRMS_mV;
     m_activeRMS_mV = activeRMS_mV;
     m_relaxMDF_hz = relaxMDF_hz;
     m_activeMDF_hz = activeMDF_hz;
-    m_mdfRange = activeMDF_hz - relaxMDF_hz;  // 预计算MDF范围，避免updateFatigue()重复计算
+    m_endMDF_hz = endMDF_hz;
+    // 保存不可在线改写的原始校准参考，作为在线学习的安全边界
+    m_calibRelaxRMS_mV = relaxRMS_mV;
+    m_calibActiveRMS_mV = activeRMS_mV;
+    m_calibRelaxMDF_hz = relaxMDF_hz;
+    m_calibActiveMDF_hz = activeMDF_hz;
+    m_calibEndMDF_hz = endMDF_hz;
+    _recomputeMdfRange();
     m_calibTimestampMs = millis();  // 记录校准时间，用于动态锚点更新窗口限制
     m_isCalibrated = true;
-    LOG("[SIG] Calibration set: relax_rms=%.3f active_rms=%.3f relax_mdf=%.1f active_mdf=%.1f\n",
-        relaxRMS_mV, activeRMS_mV, relaxMDF_hz, activeMDF_hz);
+    LOG("[SIG] Calibration set: relax_rms=%.3f active_rms=%.3f relax_mdf=%.1f active_mdf=%.1f end_mdf=%.1f\n",
+        relaxRMS_mV, activeRMS_mV, relaxMDF_hz, activeMDF_hz, endMDF_hz);
+}
+
+// 依个人疲劳下限锚点计算疲劳公式分母范围。
+// 优先用 end_mdf（校准用力阶段末真实疲劳 MDF）作 100% 锚点，使疲劳更个人化、不再被低估；
+// 仅在 end_mdf 无效（未采集 / 与 active 过于接近，说明校准未真正疲劳）时回退到 relax_mdf。
+// end_mdf 通常高于 relax_mdf（收缩期 MDF 高于静息）；若异常 end_mdf<relax_mdf 则取较高者，
+// 避免疲劳灵敏度反而下降（不改变原行为）。
+void SignalProcessor::_recomputeMdfRange() {
+    float floor = m_relaxMDF_hz;  // 安全默认：沿用原公式（疲劳跌到静息值=100%）
+    if (m_endMDF_hz > 1.0f && m_endMDF_hz < m_activeMDF_hz - 5.0f) {
+        floor = (m_endMDF_hz > m_relaxMDF_hz) ? m_endMDF_hz : m_relaxMDF_hz;
+    }
+    m_mdfRange = m_activeMDF_hz - floor;
+    if (m_mdfRange < 5.0f) m_mdfRange = 5.0f;  // 防止分母过小导致疲劳越界
 }
 
 void SignalProcessor::clearCalibration() {
@@ -799,11 +900,19 @@ void SignalProcessor::clearCalibration() {
     m_fatigue = 0.0f;
     m_activation = 0.0f;
     m_isContracting = false;
+    m_contractConfident = false;
+    m_contractDebounce = 0;
+    m_contractExitCnt = 0;
     m_signalInvalid = false;
     m_invalidFrames = 0;
     m_validFrames = 0;
     m_mainsPowerEma = 0.0f; m_mainsRms = 0.0f;
     m_mdfRange = 0.0f;  // 重置预计算的MDF范围
+    m_endMDF_hz = 0.0f;
+    m_calibRelaxRMS_mV = 0.0f; m_calibActiveRMS_mV = 0.0f;
+    m_calibRelaxMDF_hz = 0.0f; m_calibActiveMDF_hz = 0.0f; m_calibEndMDF_hz = 0.0f;
+    m_restFrames = 0;
+    m_recoveryFactor = 0.998f;
     m_calibTimestampMs = 0;
     m_lastValidMDF = 0.0f;
     m_isMdfValid = false;

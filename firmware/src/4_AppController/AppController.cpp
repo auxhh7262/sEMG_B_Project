@@ -19,7 +19,11 @@ void AppController::init(void)
 {
     PersonalCalibData_t calib = {0};
     bool calibValid = false;
-    if (_storageMgr->GetPersonalCalib(&calib) && calib.calib_timestamp_sec > 0) {
+    // 校准有效性由 StorageManager 的 magic + NaN 校验决定；
+    // 不再依赖 calib_timestamp_sec（NTP 未同步时该值为 0，会导致每次重启丢弃有效校准）。
+    // 兜底：relax/active 至少一个为正，防止"magic 在但全零"的异常结构体被误判为有效。
+    if (_storageMgr->GetPersonalCalib(&calib) &&
+        (calib.relax_rms_mv > 0.0f || calib.active_rms_mv > 0.0f)) {
         LOG("[CTRL] Boot: loaded calib relax_rms=%.3f active_rms=%.3f relax_mdf=%.1f active_mdf=%.1f end_mdf=%.1f\n",
             calib.relax_rms_mv, calib.active_rms_mv,
             calib.relax_mdf_hz, calib.active_mdf_hz, calib.end_mdf_hz);
@@ -40,7 +44,8 @@ void AppController::init(void)
 
     if (calibValid) {
         _signalProc->setCalibration(calib.relax_rms_mv, calib.active_rms_mv,
-                                    calib.relax_mdf_hz, calib.active_mdf_hz);
+                                    calib.relax_mdf_hz, calib.active_mdf_hz,
+                                    calib.end_mdf_hz);
         _signalProc->setRelaxBaseline(calib.relax_rms_mv, calib.relax_mdf_hz);
     }
 
@@ -107,7 +112,7 @@ void AppController::tick(void)
     SystemState_t curState = _stateMgr->getState();
     if (rms > 0.0f && curState == ST_RUNNING) {
         // 云端使用服务器时间，无需上传 ts 字段
-        _netMgr->pushDataPoint(rms, activation, mdf, fatigue, quality);
+        _netMgr->pushDataPoint(rms, activation, mdf, fatigue, quality, _signalProc->isCalibrated());
 
         // 限频日志（显示相对运行时间）
         const char* phaseTag = "";
@@ -265,7 +270,7 @@ void AppController::handleSaveCalib(int userScore,
     pcData.calib_timestamp_sec = _netMgr->getCurrentTimeSec();
     pcData.calib_timestamp_ms = _netMgr->getCurrentTimeMs();
     _storageMgr->UpdatePersonalCalib(&pcData);
-    _signalProc->setCalibration(relax_rms, active_rms, _calibRelaxMdf, _calibActiveMdf);
+    _signalProc->setCalibration(relax_rms, active_rms, _calibRelaxMdf, _calibActiveMdf, _calibEndMdf);
 
     // [CLOUD] 上传校准数据到云端
     _netMgr->uploadCalibration(relax_rms, _calibRelaxMdf,
@@ -283,4 +288,23 @@ void AppController::handleResetCalib()
         _stateMgr->transitionTo(ST_RUNNING);
     }
     LOG("[CTRL] Calibration reset (EEPROM cleared)\n");
+}
+
+// 阶段3：云端纵向画像精炼基线应用
+// 把云函数聚合多 session 得到的更稳健个人基线覆盖写入 EEPROM，并即时生效。
+void AppController::handleApplyProfile(float relaxRms, float activeRms,
+                                       float relaxMdf, float activeMdf, float endMdf)
+{
+    PersonalCalibData_t pcData = {0};
+    pcData.relax_rms_mv = relaxRms;
+    pcData.active_rms_mv = activeRms;
+    pcData.relax_mdf_hz = relaxMdf;
+    pcData.active_mdf_hz = activeMdf;
+    pcData.end_mdf_hz = endMdf;
+    pcData.calib_timestamp_sec = _netMgr->getCurrentTimeSec();
+    pcData.calib_timestamp_ms = _netMgr->getCurrentTimeMs();
+    _storageMgr->UpdatePersonalCalib(&pcData);
+    _signalProc->setCalibration(relaxRms, activeRms, relaxMdf, activeMdf, endMdf);
+    LOG("[CTRL] Cloud profile applied: relax_rms=%.2f act_rms=%.2f end_mdf=%.1f\n",
+        relaxRms, activeRms, endMdf);
 }

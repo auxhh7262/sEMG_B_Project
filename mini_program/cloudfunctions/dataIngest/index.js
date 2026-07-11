@@ -38,7 +38,9 @@ exports.main = async (event, context) => {
     for (let i = 0; i < points.length; i += BATCH_MAX) {
       const batch = points.slice(i, i + BATCH_MAX);
       const batchDocs = batch.map((point, idx) => {
-        const [tsSec, msRaw, rmsRaw, actRaw, mdfRaw, fatigueRaw, qualityRaw] = point;
+        const [tsSec, msRaw, rmsRaw, actRaw, mdfRaw, fatigueRaw, qualityRaw, calibratedRaw] = point;
+        // 校准状态：第 8 元素(1/0)。旧固件仅传 7 元素时无此字段 → 默认已校准，避免历史数据误显 '--'
+        const calibrated = point.length > 7 ? (calibratedRaw === 1) : true;
 
         // timestamp: UTC 毫秒（供 orderBy 排序）
         const ms = Number.isFinite(msRaw) ? Math.max(0, Math.min(999, Math.floor(msRaw))) : 0;
@@ -69,6 +71,7 @@ exports.main = async (event, context) => {
           mdf: mdfRaw || 0,
           fatigue: fatigueRaw || 0,
           quality: qualityRaw || 0,
+          calibrated,
           created_at: serverNowMs
         };
       });

@@ -26,6 +26,7 @@ NetManager::NetManager()
     , _onRecordRelax(nullptr)
     , _onRecordActive(nullptr)
     , _onSaveCalib(nullptr)
+    , _onResetCalib(nullptr)
     , _wifiDisconnectedSince(0)
     , _bleOpened(false)
     , _provisioningActive(false)
@@ -700,6 +701,12 @@ void NetManager::_executeCommand(const char* command, const char* paramsJson) {
         LOG("[NET] Executing save_calib via callback, params=%s\n", paramsJson);
         if (_onSaveCalib) {
             _onSaveCalib(paramsJson);
+        }
+    }
+    else if (strcmp(command, "reset_calib") == 0) {
+        LOG("[NET] Executing reset_calib via callback\n");
+        if (_onResetCalib) {
+            _onResetCalib();
         }
     }
     else {

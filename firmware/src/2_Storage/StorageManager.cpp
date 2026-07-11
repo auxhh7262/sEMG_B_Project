@@ -67,6 +67,17 @@ bool StorageManager::UpdatePersonalCalib(const PersonalCalibData_t* data) {
     return true;
 }
 
+bool StorageManager::ClearPersonalCalib() {
+    // 1) 数据区清零
+    PersonalCalibData_t empty = {0};
+    EEPROM.put(EEPROM_CALIB_ADDR, empty);
+    // 2) 关键：清掉有效标记字节，使 GetPersonalCalib() 第39行直接返回 false，
+    //    开机进入"无校准"状态（走未校准的 fallback 逻辑），而非"有校准但值全0"
+    EEPROM.write(EEPROM_MAGIC_ADDR, 0x00);
+    LOG("[STORAGE] Calib cleared from EEPROM (data zeroed, magic invalidated)\n");
+    return true;
+}
+
 // ==================== 个人信息（EEPROM） ====================
 
 bool StorageManager::SetUserProfile(const UserProfileData_t* profile) {

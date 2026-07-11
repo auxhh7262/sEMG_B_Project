@@ -60,6 +60,7 @@ public:
     void onRecordRelax(void (*cb)()) { _onRecordRelax = cb; }
     void onRecordActive(void (*cb)()) { _onRecordActive = cb; }
     void onSaveCalib(void (*cb)(const char* params)) { _onSaveCalib = cb; }
+    void onResetCalib(void (*cb)()) { _onResetCalib = cb; }
 
 private:
     void _wifiTick();
@@ -135,6 +136,7 @@ private:
     void (*_onRecordRelax)();
     void (*_onRecordActive)();
     void (*_onSaveCalib)(const char* params);
+    void (*_onResetCalib)();
     char _lastParams[128];
     uint32_t _wifiDisconnectedSince;
 };

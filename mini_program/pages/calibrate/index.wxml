@@ -21,13 +21,16 @@ module.exports.val = val;
       </view>
     </view>
 
-    <!-- 按钮：个人信息 + 开始校准 -->
+    <!-- 按钮：个人信息 | 开始校准 | 清除校准（一行均匀分布） -->
     <view class="action-buttons">
       <button class="btn btn-outline" bindtap="onShowUserForm">
-        {{currentUser ? '修改个人信息' : '录入个人信息'}}
+        个人信息
       </button>
       <button class="btn btn-outline" bindtap="{{currentUser ? 'onStartCalibration' : 'onShowUserForm'}}">
         开始校准
+      </button>
+      <button class="btn btn-outline btn-danger" bindtap="onResetCalib">
+        清除校准
       </button>
     </view>
 

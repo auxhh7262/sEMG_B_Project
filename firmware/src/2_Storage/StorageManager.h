@@ -43,6 +43,7 @@ public:
     // 校准数据（EEPROM）
     bool GetPersonalCalib(PersonalCalibData_t* data);
     bool UpdatePersonalCalib(const PersonalCalibData_t* data);
+    bool ClearPersonalCalib();   // 彻底清除：数据区清零 + 清有效标记，开机判定为无校准
 
     // 个人信息（EEPROM）
     bool GetUserProfile(UserProfileData_t* profile);

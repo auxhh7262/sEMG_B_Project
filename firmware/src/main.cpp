@@ -111,6 +111,12 @@ static void _onCloudSaveCalib(const char* params) {
     gAppController.handleSaveCalib(0, name[0] ? name : nullptr, age, gender, handedness);
 }
 
+// 云端下发 reset_calib 命令 → 彻底清除校准
+static void _onCloudResetCalib() {
+    LOG("[MAIN] Cloud reset_calib command\n");
+    gAppController.handleResetCalib();
+}
+
 // WiFi 凭证配网处理 — 非阻塞状态机
 static bool     _besConnecting = false;
 static uint32_t _besConnectStart = 0;
@@ -222,6 +228,7 @@ void setup() {
     gNetManager.onRecordRelax(_onCloudRecordRelax);
     gNetManager.onRecordActive(_onCloudRecordActive);
     gNetManager.onSaveCalib(_onCloudSaveCalib);
+    gNetManager.onResetCalib(_onCloudResetCalib);
 
     if (netOk) {
         // 设置 deviceId 到 BLE

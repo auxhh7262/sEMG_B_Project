@@ -1,0 +1,9 @@
+{
+  "name": "clearCalibration",
+  "version": "1.0.0",
+  "description": "清除云端 sessions 集合中该设备的校准数据（三处一致清除之一）",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "latest"
+  }
+}

@@ -411,6 +411,62 @@ Page({
     this._resetAll();
   },
 
+  // ==================== 清除校准 ====================
+  onResetCalib() {
+    if (!this._deviceId) {
+      wx.showToast({ title: '设备未连接', icon: 'none' });
+      return;
+    }
+    wx.showModal({
+      title: '清除校准',
+      content: '确定要清除设备上的校准数据吗？清除后需重新校准。',
+      confirmText: '清除',
+      confirmColor: '#e74c3c',
+      success: (res) => {
+        if (res.confirm) {
+          this._doResetCalib();
+        }
+      },
+    });
+  },
+
+  async _doResetCalib() {
+    try {
+      await this._sendCommand('reset_calib');
+      logger.log('[calibrate] reset_calib sent');
+
+      // 同步清除云端 sessions 中的校准记录（与固件 EEPROM、本地缓存三处一致），
+      // 否则实时页/校准页会从云端把旧校准重新恢复出来。
+      if (wx.cloud && this._deviceId) {
+        try {
+          const res = await wx.cloud.callFunction({
+            name: 'clearCalibration',
+            data: { device_id: this._deviceId },
+          });
+          logger.log('[calibrate] clearCalibration done:', res.result);
+        } catch (ce) {
+          logger.warn('[calibrate] clearCalibration failed (cloud may still hold stale calib):', ce);
+        }
+      }
+
+      // 同步清除本地缓存，使页面立即反映"无校准"状态
+      try { wx.removeStorageSync('calib_data'); } catch (_) {}
+      this.setData({
+        relaxRms: null,
+        relaxMdf: null,
+        activeRms: null,
+        activeMdf: null,
+        endMdf: null,
+        saved: false,
+        statusText: '校准数据已清除，请重新校准',
+      });
+      wx.showToast({ title: '已发送清除指令', icon: 'success' });
+    } catch (e) {
+      logger.error('[calibrate] send reset_calib failed:', e);
+      wx.showToast({ title: '发送失败', icon: 'none' });
+    }
+  },
+
   // ==================== 保存校准 ====================
   async _doSaveCalib() {
     const user = storage.getCurrentUser();

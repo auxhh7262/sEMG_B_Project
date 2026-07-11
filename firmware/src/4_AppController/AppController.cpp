@@ -278,10 +278,9 @@ void AppController::handleSaveCalib(int userScore,
 void AppController::handleResetCalib()
 {
     _signalProc->clearCalibration();
-    PersonalCalibData_t emptyData = {0};
-    _storageMgr->UpdatePersonalCalib(&emptyData);
+    _storageMgr->ClearPersonalCalib();   // 彻底清除：数据清零 + 清有效标记
     if (_stateMgr->getState() != ST_RUNNING) {
         _stateMgr->transitionTo(ST_RUNNING);
     }
-    LOG("[CTRL] Calibration reset\n");
+    LOG("[CTRL] Calibration reset (EEPROM cleared)\n");
 }

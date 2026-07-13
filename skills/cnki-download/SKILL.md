@@ -58,13 +58,13 @@ pythonw E:\sEMG_B_Project\skills\cnki-download\cnki_download.pyw --cli --no-gui 
 
 ## 关键技术细节
 
-| 步骤 | 实现 |
-|------|------|
-| 登录 | `input[type="text"]` + `input[type="password"]` + submit button |
-| 列文章 | `document.querySelectorAll('td.is-Title a')` |
-| 进入阅读 | click 第 i 个 A 标签（SPA 路由必须用 click 不用 navigate） |
+| 步骤     | 实现                                                               |
+| -------- | ------------------------------------------------------------------ |
+| 登录     | `input[type="text"]` + `input[type="password"]` + submit button    |
+| 列文章   | `document.querySelectorAll('td.is-Title a')`                       |
+| 进入阅读 | click 第 i 个 A 标签（SPA 路由必须用 click 不用 navigate）         |
 | 触发下载 | `document.querySelectorAll('.xDownLoad-popover__item')[i].click()` |
-| 等待文件 | 监控 `C:\Users\honghuang\Downloads` 文件大小稳定后捕获 |
+| 等待文件 | 监控 `C:\Users\honghuang\Downloads` 文件大小稳定后捕获             |
 
 ## 已知坑
 

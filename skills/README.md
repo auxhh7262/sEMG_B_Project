@@ -1,6 +1,6 @@
 # sEMG Skill 体系使用指南
 
-> 版本：v1.2 | 更新：2026-07-07
+> 版本：v1.3 | 更新：2026-07-13
 > **所有 AI Agent（QClaw / TRAE / WorkBuddy）共享的技能脚本**
 
 ---
@@ -33,26 +33,26 @@
 
 ## Skill 列表
 
-| Skill | 路径 | 功能 |
-|-------|------|------|
-| **firmware-upload** | `E:\sEMG_B_Project\skills\firmware-upload\` | 固件编译上传 + 串口监控 |
-| **miniprogram-upload** | `E:\sEMG_B_Project\skills\miniprogram-upload\` | 小程序编译 + 日志服务器 |
-| **cloudfunction-deploy** | `E:\sEMG_B_Project\skills\cloudfunction-deploy\` | 微信云函数批量部署 |
-| **git-push** | `E:\sEMG_B_Project\skills\git-push\` | Git 提交 + 推送 |
-| **workflow** | `E:\sEMG_B_Project\skills\workflow\` | 组合工作流（固件→小程序） |
+| Skill                    | 路径                                             | 功能                      |
+| ------------------------ | ------------------------------------------------ | ------------------------- |
+| **firmware-upload**      | `E:\sEMG_B_Project\skills\firmware-upload\`      | 固件编译上传 + 串口监控   |
+| **miniprogram-upload**   | `E:\sEMG_B_Project\skills\miniprogram-upload\`   | 小程序编译 + 日志服务器   |
+| **cloudfunction-deploy** | `E:\sEMG_B_Project\skills\cloudfunction-deploy\` | 微信云函数批量部署        |
+| **git-push**             | `E:\sEMG_B_Project\skills\git-push\`             | Git 提交 + 推送           |
+| **workflow**             | `E:\sEMG_B_Project\skills\workflow\`             | 组合工作流（固件→小程序） |
 
 ---
 
 ## 触发词速查表
 
-| 操作 | 触发词 |
-|------|--------|
-| 上传固件 | "上传固件" / "编译上传" / "烧录固件" / "刷固件" |
-| 编译小程序 | "编译小程序" / "预览小程序" / "上传小程序" |
-| 部署云函数 | "部署云函数" / "上传云函数" / "部署 CF" |
-| Git 推送 | "提交代码" / "git push" / "推送代码" |
-| 一键部署 | "上传并编译" / "一键部署" / "deploy" |
-| 分析日志 | "分析" / "分析日志" / "查日志" |
+| 操作       | 触发词                                          |
+| ---------- | ----------------------------------------------- |
+| 上传固件   | "上传固件" / "编译上传" / "烧录固件" / "刷固件" |
+| 编译小程序 | "编译小程序" / "预览小程序" / "上传小程序"      |
+| 部署云函数 | "部署云函数" / "上传云函数" / "部署 CF"         |
+| Git 推送   | "提交代码" / "git push" / "推送代码"            |
+| 一键部署   | "上传并编译" / "一键部署" / "deploy"            |
+| 分析日志   | "分析" / "分析日志" / "查日志"                  |
 
 ---
 
@@ -66,20 +66,20 @@ pythonw E:\sEMG_B_Project\skills\<skill-name>\<script>.pyw [参数] [--cli]
 
 ### 各 Skill 调用命令
 
-| 操作 | 命令 | 参数 |
-|------|------|------|
-| **上传固件** | `pythonw E:\sEMG_B_Project\skills\firmware-upload\firmware_upload.pyw --cli E:\sEMG_B_Project\firmware` | 固件目录 |
-| **编译小程序** | `pythonw E:\sEMG_B_Project\skills\miniprogram-upload\miniprogram_upload.pyw --cli E:\sEMG_B_Project` | 项目目录 |
-| **部署云函数** | `pythonw E:\sEMG_B_Project\skills\cloudfunction-deploy\cloudfunction_deploy.pyw --cli E:\sEMG_B_Project\mini_program\cloudfunctions` | 云函数目录 |
-| **Git 推送** | `pythonw E:\sEMG_B_Project\skills\git-push\git_push.pyw --cli E:\sEMG_B_Project` | 项目目录 |
-| **一键部署** | `pythonw E:\sEMG_B_Project\skills\workflow\workflow.pyw --cli E:\sEMG_B_Project\firmware E:\sEMG_B_Project` | 固件目录 + 项目目录 |
+| 操作           | 命令                                                                                                                                 | 参数                |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------- |
+| **上传固件**   | `pythonw E:\sEMG_B_Project\skills\firmware-upload\firmware_upload.pyw --cli E:\sEMG_B_Project\firmware`                              | 固件目录            |
+| **编译小程序** | `pythonw E:\sEMG_B_Project\skills\miniprogram-upload\miniprogram_upload.pyw --cli E:\sEMG_B_Project`                                 | 项目目录            |
+| **部署云函数** | `pythonw E:\sEMG_B_Project\skills\cloudfunction-deploy\cloudfunction_deploy.pyw --cli E:\sEMG_B_Project\mini_program\cloudfunctions` | 云函数目录          |
+| **Git 推送**   | `pythonw E:\sEMG_B_Project\skills\git-push\git_push.pyw --cli E:\sEMG_B_Project`                                                     | 项目目录            |
+| **一键部署**   | `pythonw E:\sEMG_B_Project\skills\workflow\workflow.pyw --cli E:\sEMG_B_Project\firmware E:\sEMG_B_Project`                          | 固件目录 + 项目目录 |
 
 ### 两种模式
 
-| 模式 | 命令 | 特征 |
-|------|------|------|
-| **GUI**（默认） | `pythonw script.pyw` | Tkinter 深色终端界面，实时着色显示 |
-| **CLI** | `pythonw script.pyw --cli` | 控制台输出，适合 AI Agent 调用 |
+| 模式            | 命令                       | 特征                               |
+| --------------- | -------------------------- | ---------------------------------- |
+| **GUI**（默认） | `pythonw script.pyw`       | Tkinter 深色终端界面，实时着色显示 |
+| **CLI**         | `pythonw script.pyw --cli` | 控制台输出，适合 AI Agent 调用     |
 
 ### AI Agent 调用示例
 
@@ -107,12 +107,12 @@ pythonw E:\sEMG_B_Project\skills\workflow\workflow.pyw --cli E:\sEMG_B_Project\f
 
 ### 规则文件
 
-| AI Agent | 规则文件 | 位置 |
-|----------|----------|------|
-| QClaw | `AGENTS.md` | `C:\Users\honghuang\.qclaw\workspace\` |
-| TRAE | `rules.md` | `E:\sEMG_B_Project\.trae\` |
-| WorkBuddy | `rules.md` | `E:\sEMG_B_Project\.workbuddy\` |
-| 项目根 | `rules.md` | `E:\sEMG_B_Project\` |
+| AI Agent   | 规则文件    | 位置                                   |
+| ---------- | ----------- | -------------------------------------- |
+| QClaw      | `AGENTS.md` | `C:\Users\honghuang\.qclaw\workspace\` |
+| TRAE       | `rules.md`  | `E:\sEMG_B_Project\.trae\`             |
+| WorkBuddy  | `rules.md`  | `E:\sEMG_B_Project\.workbuddy\`        |
+| 项目根     | `rules.md`  | `E:\sEMG_B_Project\`                   |
 
 **权威源**：`E:\sEMG_B_Project\rules.md`，修改后需同步到各 Agent。
 
@@ -144,12 +144,12 @@ AI: 告知用户发现的问题
 
 ### 日志路径
 
-| 日志类型 | 路径 | 文件格式 |
-|----------|------|----------|
-| 固件日志 | `E:\sEMG_B_Project\logs\serial\` | `serial_log_*.txt` |
-| 小程序日志 | `E:\sEMG_B_Project\logs\mini\` | `mini_log_*.txt` |
+| 日志类型   | 路径                                    | 文件格式                     |
+| ---------- | --------------------------------------- | ---------------------------- |
+| 固件日志   | `E:\sEMG_B_Project\logs\serial\`        | `serial_log_*.txt`           |
+| 小程序日志 | `E:\sEMG_B_Project\logs\mini\`          | `mini_log_*.txt`             |
 | 云函数日志 | `E:\sEMG_B_Project\logs\cloudfunction\` | `cloudfunction_deploy_*.txt` |
-| Git 日志 | `E:\sEMG_B_Project\logs\git\` | `git_push_*.txt` |
+| Git 日志   | `E:\sEMG_B_Project\logs\git\`           | `git_push_*.txt`             |
 
 ### AI Agent 行为规则
 
@@ -162,14 +162,14 @@ AI: 告知用户发现的问题
 
 ## 项目路径规范
 
-| 项目 | 路径 |
-|------|------|
-| **当前项目根** | `E:\sEMG_B_Project\` |
-| **固件目录** | `E:\sEMG_B_Project\firmware` |
-| **小程序目录** | `E:\sEMG_B_Project\mini_program` |
+| 项目           | 路径                                            |
+| -------------- | ----------------------------------------------- |
+| **当前项目根** | `E:\sEMG_B_Project\`                            |
+| **固件目录**   | `E:\sEMG_B_Project\firmware`                    |
+| **小程序目录** | `E:\sEMG_B_Project\mini_program`                |
 | **云函数目录** | `E:\sEMG_B_Project\mini_program\cloudfunctions` |
-| **Skill 脚本** | `E:\sEMG_B_Project\skills\` |
-| **日志目录** | `E:\sEMG_B_Project\logs\` |
+| **Skill 脚本** | `E:\sEMG_B_Project\skills\`                     |
+| **日志目录**   | `E:\sEMG_B_Project\logs\`                       |
 
 ### Git 远程仓库
 
@@ -207,23 +207,23 @@ Skill 会自动显示具体的 git 错误信息（如 `non-fast-forward`、认�
 
 ## 详细文档
 
-| Skill | 详细文档 |
-|-------|----------|
-| firmware-upload | [`firmware-upload/SKILL.md`](firmware-upload/SKILL.md) |
-| miniprogram-upload | [`miniprogram-upload/SKILL.md`](miniprogram-upload/SKILL.md) |
+| Skill                | 详细文档                                                         |
+| -------------------- | ---------------------------------------------------------------- |
+| firmware-upload      | [`firmware-upload/SKILL.md`](firmware-upload/SKILL.md)           |
+| miniprogram-upload   | [`miniprogram-upload/SKILL.md`](miniprogram-upload/SKILL.md)     |
 | cloudfunction-deploy | [`cloudfunction-deploy/SKILL.md`](cloudfunction-deploy/SKILL.md) |
-| git-push | [`git-push/SKILL.md`](git-push/SKILL.md) |
-| workflow | [`workflow/SKILL.md`](workflow/SKILL.md) |
+| git-push             | [`git-push/SKILL.md`](git-push/SKILL.md)                         |
+| workflow             | [`workflow/SKILL.md`](workflow/SKILL.md)                         |
 
 ---
 
 ## 日志目录说明
 
-| 日志目录 | 来源 | 文件格式 |
-|----------|------|----------|
-| `E:\sEMG_B_Project\logs\serial\` | 固件串口监控 | `serial_log_*.txt` |
-| `E:\sEMG_B_Project\logs\mini\` | 小程序日志服务器 | `mini_log_*.txt` |
-| `E:\sEMG_B_Project\logs\cloudfunction\` | 云函数部署 | `cloudfunction_deploy_*.txt` |
-| `E:\sEMG_B_Project\logs\git\` | Git 推送 | `git_push_*.txt` |
+| 日志目录                                | 来源             | 文件格式                     |
+| --------------------------------------- | ---------------- | ---------------------------- |
+| `E:\sEMG_B_Project\logs\serial\`        | 固件串口监控     | `serial_log_*.txt`           |
+| `E:\sEMG_B_Project\logs\mini\`          | 小程序日志服务器 | `mini_log_*.txt`             |
+| `E:\sEMG_B_Project\logs\cloudfunction\` | 云函数部署       | `cloudfunction_deploy_*.txt` |
+| `E:\sEMG_B_Project\logs\git\`           | Git 推送         | `git_push_*.txt`             |
 
 **所有项目共享日志目录**，按时间戳区分日志文件。

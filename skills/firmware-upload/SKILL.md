@@ -97,23 +97,23 @@ pythonw "E:\sEMG_B_Project\skills\firmware-upload\firmware_upload.pyw"
 
 ## 路径配置
 
-| 配置项 | 值 |
-|--------|-----|
-| 固件目录（默认） | `E:\sEMG_B_Project\firmware` |
-| 串口 | COM4 / 115200 baud |
-| pio.exe | `C:\Users\honghuang\.platformio\penv\Scripts\pio.exe` |
-| PIO_HOME | 项目内 `.pio` 目录（避免锁文件冲突） |
-| 日志目录 | `E:\sEMG_B_Project\logs\serial` |
-| 日志文件格式 | `serial_log_YYYYMMDD_HHMMSS.txt` |
+| 配置项           | 值                                                    |
+| ---------------- | ----------------------------------------------------- |
+| 固件目录（默认） | `E:\sEMG_B_Project\firmware`                          |
+| 串口             | COM4 / 115200 baud                                    |
+| pio.exe          | `C:\Users\honghuang\.platformio\penv\Scripts\pio.exe` |
+| PIO_HOME         | 项目内 `.pio` 目录（避免锁文件冲突）                  |
+| 日志目录         | `E:\sEMG_B_Project\logs\serial`                       |
+| 日志文件格式     | `serial_log_YYYYMMDD_HHMMSS.txt`                      |
 
 ---
 
 ## 文件
 
-| 文件 | 作用 |
-|------|------|
+| 文件                  | 作用                       |
+| --------------------- | -------------------------- |
 | `firmware_upload.pyw` | 主程序（GUI + CLI 双模式） |
-| `SKILL.md` | 本文件 |
+| `SKILL.md`            | 本文件                     |
 
 ---
 

@@ -75,8 +75,8 @@ pythonw "E:\sEMG_B_Project\skills\cloudfunction-deploy\cloudfunction_deploy.pyw"
 
 ## 文件说明
 
-| 文件 | 作用 |
-|------|------|
+| 文件                       | 作用                                  |
+| -------------------------- | ------------------------------------- |
 | `cloudfunction_deploy.pyw` | **主程序**（支持 GUI + CLI 两种模式） |
 
 ### 两种模式
@@ -91,40 +91,40 @@ python "E:\sEMG_B_Project\skills\cloudfunction-deploy\cloudfunction_deploy.pyw" 
 
 ## GUI 按钮说明
 
-| 按钮 | 功能 | 对应命令 |
-|------|------|---------|
-| 🔐 Login | 扫码登录微信云开发 | `tcb login` |
-| ✓ Check Login | 检查登录状态 | `tcb env list --json` |
-| 🌐 Env | 列出所有云环境 | `tcb env list` |
-| 📋 Fn List | 列出云端已部署的云函数 | `tcb fn list -e <envId>` |
-| 🚀 Deploy All | 部署所有本地云函数 | `tcb fn deploy <fn> -e <envId> --force` |
-| ⚡ Deploy Selected | 部署选中的云函数 | `tcb fn deploy <fn> -e <envId> --force` |
-| 🔄 Refresh | 刷新本地云函数列表 | — |
-| 📂 Open Logs | 打开日志目录 | — |
-| 📁 Open CloudFunctions | 打开云函数目录 | — |
+| 按钮                   | 功能                   | 对应命令                                |
+| ---------------------- | ---------------------- | --------------------------------------- |
+| 🔐 Login               | 扫码登录微信云开发     | `tcb login`                             |
+| ✓ Check Login          | 检查登录状态           | `tcb env list --json`                   |
+| 🌐 Env                 | 列出所有云环境         | `tcb env list`                          |
+| 📋 Fn List             | 列出云端已部署的云函数 | `tcb fn list -e <envId>`                |
+| 🚀 Deploy All          | 部署所有本地云函数     | `tcb fn deploy <fn> -e <envId> --force` |
+| ⚡ Deploy Selected      | 部署选中的云函数       | `tcb fn deploy <fn> -e <envId> --force` |
+| 🔄 Refresh             | 刷新本地云函数列表     | —                                       |
+| 📂 Open Logs           | 打开日志目录           | —                                       |
+| 📁 Open CloudFunctions | 打开云函数目录         | —                                       |
 
 ## 颜色标签
 
-| 标签 | 颜色 | 用途 |
-|------|------|------|
-| BOOT | 青蓝 #66ccff | 启动/状态切换 |
-| INFO | 浅蓝 #00ccff | 普通信息 |
-| DEPLOY | 深蓝 #00aaff | 部署中 |
-| OK | 绿色 #00ff88 | 成功 |
-| WARN | 黄色 #ffcc00 | 警告 |
-| ERROR | 红色 #ff4444 | 失败 |
-| HIGHLIGHT | 粉红 #ff88ff | 关键信息 |
+| 标签      | 颜色         | 用途          |
+| --------- | ------------ | ------------- |
+| BOOT      | 青蓝 #66ccff | 启动/状态切换 |
+| INFO      | 浅蓝 #00ccff | 普通信息      |
+| DEPLOY    | 深蓝 #00aaff | 部署中        |
+| OK        | 绿色 #00ff88 | 成功          |
+| WARN      | 黄色 #ffcc00 | 警告          |
+| ERROR     | 红色 #ff4444 | 失败          |
+| HIGHLIGHT | 粉红 #ff88ff | 关键信息      |
 
 ## 路径配置
 
-| 配置项 | 值 |
-|--------|-----|
-| 默认项目 | `E:\sEMG_B_Project` |
-| 云函数目录 | `E:\sEMG_B_Project\mini_program\cloudfunctions` |
-| 环境 ID | `cloud1-d4gqmimmo05b12c94` |
-| 日志目录 | `E:\sEMG_B_Project\logs\cloudfunction` |
-| 日志文件格式 | `cloudfunction_deploy_YYYYMMDD_HHMMSS.txt` |
-| tcb CLI | 全局安装 (`@cloudbase/cli`) |
+| 配置项       | 值                                              |
+| ------------ | ----------------------------------------------- |
+| 默认项目     | `E:\sEMG_B_Project`                             |
+| 云函数目录   | `E:\sEMG_B_Project\mini_program\cloudfunctions` |
+| 环境 ID      | `cloud1-d4gqmimmo05b12c94`                      |
+| 日志目录     | `E:\sEMG_B_Project\logs\cloudfunction`          |
+| 日志文件格式 | `cloudfunction_deploy_YYYYMMDD_HHMMSS.txt`      |
+| tcb CLI      | 全局安装 (`@cloudbase/cli`)                     |
 
 ## 前置依赖
 
@@ -146,26 +146,26 @@ python "E:\sEMG_B_Project\skills\cloudfunction-deploy\cloudfunction_deploy.pyw" 
 
 ## 常见错误
 
-| 错误信息 | 原因 | 解决 |
-|---------|------|------|
-| `Not logged in` | 未登录 | 点击 [Login] 扫码 |
-| `Function not found` | 目录缺少 `index.js` | 检查云函数文件 |
-| `TCP timeout` | 网络问题 | 稍后重试 |
-| `Permission denied` | 权限不足 | 在微信云开发控制台授权 |
+| 错误信息             | 原因                | 解决                   |
+| -------------------- | ------------------- | ---------------------- |
+| `Not logged in`      | 未登录              | 点击 [Login] 扫码      |
+| `Function not found` | 目录缺少 `index.js` | 检查云函数文件         |
+| `TCP timeout`        | 网络问题            | 稍后重试               |
+| `Permission denied`  | 权限不足            | 在微信云开发控制台授权 |
 
 ## 部署目标云函数
 
-| 函数名 | 作用 |
-|--------|------|
-| dataIngest | 固件上传数据入口 |
-| deviceRegister | 设备注册 |
-| sendDeviceCommand | 小程序发送校准命令 |
-| getDeviceCommand | 固件轮询获取命令 |
-| ackDeviceCommand | 固件命令执行确认 |
-| getDeviceStatus | 查询设备状态 |
-| reportDeviceStatus | 设备上报状态 |
-| uploadCalibration | 上传校准数据 |
-| queryDataPoints | 查询历史肌电数据 |
+| 函数名             | 作用               |
+| ------------------ | ------------------ |
+| dataIngest         | 固件上传数据入口   |
+| deviceRegister     | 设备注册           |
+| sendDeviceCommand  | 小程序发送校准命令 |
+| getDeviceCommand   | 固件轮询获取命令   |
+| ackDeviceCommand   | 固件命令执行确认   |
+| getDeviceStatus    | 查询设备状态       |
+| reportDeviceStatus | 设备上报状态       |
+| uploadCalibration  | 上传校准数据       |
+| queryDataPoints    | 查询历史肌电数据   |
 
 ## 关于创建时间
 

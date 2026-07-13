@@ -33,18 +33,18 @@ pythonw E:\sEMG_B_Project\skills\web-login\web_login.pyw `
 ```
 
 参数说明：
-| 参数 | 必填 | 说明 |
-|------|------|------|
-| `--url` | 否 | 固定为知网研学地址，无需传 |
-| `--user` | 否 | 固定账号，传入会被忽略 |
-| `--password` | 否 | 固定密码，传入会被忽略 |
-| `--browser` | 否 | `edge`(默认) / `chrome` |
-| `--agree` | 否 | 勾选页面第一个 checkbox（协议/我已阅读） |
-| `--skip-text` | 否 | 登录后点击文字匹配的按钮，如 `跳过` |
-| `--user-ref/--pass-ref/--login-ref/--agree-ref/--skip-ref` | 否 | 显式指定 @ref（绕过自动识别） |
-| `--screenshot` | 否 | 登录完成后截图路径 |
-| `--out` | 否 | 结果 JSON 路径（默认 `web_login_result.json`） |
-| `--wait` | 否 | 点击登录后等待秒数，默认 5 |
+| 参数                                                       | 必填   | 说明                                           |
+| ---------------------------------------------------------- | ------ | ---------------------------------------------- |
+| `--url`                                                    | 否     | 固定为知网研学地址，无需传                     |
+| `--user`                                                   | 否     | 固定账号，传入会被忽略                         |
+| `--password`                                               | 否     | 固定密码，传入会被忽略                         |
+| `--browser`                                                | 否     | `edge`(默认) / `chrome`                        |
+| `--agree`                                                  | 否     | 勾选页面第一个 checkbox（协议/我已阅读）       |
+| `--skip-text`                                              | 否     | 登录后点击文字匹配的按钮，如 `跳过`            |
+| `--user-ref/--pass-ref/--login-ref/--agree-ref/--skip-ref` | 否     | 显式指定 @ref（绕过自动识别）                  |
+| `--screenshot`                                             | 否     | 登录完成后截图路径                             |
+| `--out`                                                    | 否     | 结果 JSON 路径（默认 `web_login_result.json`） |
+| `--wait`                                                   | 否     | 点击登录后等待秒数，默认 5                     |
 
 ## 输出
 写入 `--out` 的 JSON（默认 `web_login_result.json`）并打印一行 JSON：

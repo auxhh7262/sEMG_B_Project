@@ -1,6 +1,6 @@
 # sEMG 项目文件组织规则
 
-> 版本：v1.7 | 生效：2026-07-07
+> 版本：v1.9 | 生效：2026-07-13
 > 本文件是项目规则的**唯一权威源**。
 > 所有 AI Agent 在创建或移动文件时，必须遵循以下规则。
 
@@ -26,12 +26,12 @@ E:\sEMG_B_Project\
 
 以下资源对所有 AI Agent（QClaw / TRAE / WorkBuddy）共享，任何 Agent 都可以读取、修改和调用：
 
-| 资源 | 路径 | 说明 |
-|------|------|------|
-| **规则文件** | `rules.md` | 单一权威源，三个 Agent 都可修改并同步 |
-| **Skill 脚本** | `E:\sEMG_B_Project\skills\` | 共享工具，三个 Agent 都可调用和修改 |
-| **日志目录** | `E:\sEMG_B_Project\logs\` | 共享日志，三个 Agent 都可写入 |
-| **文档目录** | `E:\sEMG_B_Project\docs\` | 共享文档，三个 Agent 都可读写 |
+| 资源           | 路径                        | 说明                                  |
+| -------------- | --------------------------- | ------------------------------------- |
+| **规则文件**   | `rules.md`                  | 单一权威源，三个 Agent 都可修改并同步 |
+| **Skill 脚本** | `E:\sEMG_B_Project\skills\` | 共享工具，三个 Agent 都可调用和修改   |
+| **日志目录**   | `E:\sEMG_B_Project\logs\`   | 共享日志，三个 Agent 都可写入         |
+| **文档目录**   | `E:\sEMG_B_Project\docs\`   | 共享文档，三个 Agent 都可读写         |
 
 ---
 
@@ -41,11 +41,11 @@ E:\sEMG_B_Project\
 
 ### 允许的子目录
 
-| 目录 | 用途 | 说明 |
-|------|------|------|
-| `firmware/` | PlatformIO 固件源码 | 唯一入口 |
-| `mini_program/` | 微信小程序源码 | 唯一入口 |
-| `scripts/` | 一次性开发辅助脚本 | 已 .gitignore |
+| 目录            | 用途                | 说明          |
+| --------------- | ------------------- | ------------- |
+| `firmware/`     | PlatformIO 固件源码 | 唯一入口      |
+| `mini_program/` | 微信小程序源码      | 唯一入口      |
+| `scripts/`      | 一次性开发辅助脚本  | 已 .gitignore |
 
 ### 禁止事项
 
@@ -187,13 +187,13 @@ pythonw E:\sEMG_B_Project\skills\<skill>\<script>.pyw [项目路径参数] [--cl
 
 ### 各 Skill 调用命令
 
-| 操作 | 命令 | 参数说明 |
-|------|------|---------|
-| 完整部署 | `pythonw E:\sEMG_B_Project\skills\workflow\workflow.pyw --cli E:\sEMG_B_Project\firmware E:\sEMG_B_Project\mini_program` | 先上传固件→10秒→编译小程序 |
-| 上传固件 | `pythonw E:\sEMG_B_Project\skills\firmware-upload\firmware_upload.pyw --cli E:\sEMG_B_Project\firmware` | 编译+上传+串口监控GUI |
-| 编译小程序 | `pythonw E:\sEMG_B_Project\skills\miniprogram-upload\miniprogram_upload.pyw --cli E:\sEMG_B_Project\mini_program` | 编译+预览码+日志服务GUI |
-| Git推送 | `pythonw E:\sEMG_B_Project\skills\git-push\git_push.pyw --cli E:\sEMG_B_Project` | 自动 add→commit→push |
-| 部署云函数 | `pythonw E:\sEMG_B_Project\skills\cloudfunction-deploy\cloudfunction_deploy.pyw --cli E:\sEMG_B_Project\mini_program\cloudfunctions` | 一键部署云函数 |
+| 操作       | 命令                                                                                                                                 | 参数说明                   |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------ | -------------------------- |
+| 完整部署   | `pythonw E:\sEMG_B_Project\skills\workflow\workflow.pyw --cli E:\sEMG_B_Project\firmware E:\sEMG_B_Project\mini_program`             | 先上传固件→10秒→编译小程序 |
+| 上传固件   | `pythonw E:\sEMG_B_Project\skills\firmware-upload\firmware_upload.pyw --cli E:\sEMG_B_Project\firmware`                              | 编译+上传+串口监控GUI      |
+| 编译小程序 | `pythonw E:\sEMG_B_Project\skills\miniprogram-upload\miniprogram_upload.pyw --cli E:\sEMG_B_Project\mini_program`                    | 编译+预览码+日志服务GUI    |
+| Git推送    | `pythonw E:\sEMG_B_Project\skills\git-push\git_push.pyw --cli E:\sEMG_B_Project`                                                     | 自动 add→commit→push       |
+| 部署云函数 | `pythonw E:\sEMG_B_Project\skills\cloudfunction-deploy\cloudfunction_deploy.pyw --cli E:\sEMG_B_Project\mini_program\cloudfunctions` | 一键部署云函数             |
 
 ### Skill 调用原则
 
@@ -240,29 +240,29 @@ pythonw E:\sEMG_B_Project\skills\<skill>\<script>.pyw [项目路径参数] [--cl
 
 #### 项目级文档（E:\sEMG_B_Project\docs\）
 
-| 文档 | 说明 |
-|------|------|
+| 文档                | 说明                 |
+| ------------------- | -------------------- |
 | 固件与小程序架构.md | 固件和小程序整体架构 |
-| 小程序页面设计.md | 页面设计文档 |
-| 硬件说明.md | 硬件相关说明 |
-| 肌电算法说明.md | 算法相关说明 |
-| 云开发环境指南.md | 云函数部署等 |
+| 小程序页面设计.md   | 页面设计文档         |
+| 硬件说明.md         | 硬件相关说明         |
+| 肌电算法说明.md     | 算法相关说明         |
+| 云开发环境指南.md   | 云函数部署等         |
 
 #### Skill 文档（E:\sEMG_B_Project\skills\）
 
-| 文档 | 说明 |
-|------|------|
-| README.md | Skill 体系使用指南 |
-| firmware-upload/SKILL.md | 固件上传 |
-| miniprogram-upload/SKILL.md | 小程序编译 |
-| workflow/SKILL.md | 组合工作流 |
-| git-push/SKILL.md | Git 推送 |
-| cloudfunction-deploy/SKILL.md | 云函数部署 |
+| 文档                          | 说明               |
+| ----------------------------- | ------------------ |
+| README.md                     | Skill 体系使用指南 |
+| firmware-upload/SKILL.md      | 固件上传           |
+| miniprogram-upload/SKILL.md   | 小程序编译         |
+| workflow/SKILL.md             | 组合工作流         |
+| git-push/SKILL.md             | Git 推送           |
+| cloudfunction-deploy/SKILL.md | 云函数部署         |
 
 #### 索引文档
 
-| 文档 | 说明 |
-|------|------|
+| 文档        | 说明       |
+| ----------- | ---------- |
 | 文档索引.md | 本索引文件 |
 
 ### 更新流程
@@ -303,11 +303,11 @@ Copy-Item $src "E:\sEMG_B_Project\.workbuddy\rules.md" -Force
 
 ### 各工具配置文件
 
-| 工具 | 配置文件 |
-|------|----------|
-| QClaw | `C:\Users\honghuang\.qclaw\workspace\AGENTS.md` |
-| TRAE | `E:\sEMG_B_Project\.trae\rules.md` |
-| WorkBuddy | `E:\sEMG_B_Project\.workbuddy\rules.md` |
+| 工具      | 配置文件                                        |
+| --------- | ----------------------------------------------- |
+| QClaw     | `C:\Users\honghuang\.qclaw\workspace\AGENTS.md` |
+| TRAE      | `E:\sEMG_B_Project\.trae\rules.md`              |
+| WorkBuddy | `E:\sEMG_B_Project\.workbuddy\rules.md`         |
 
 ---
 
@@ -348,13 +348,13 @@ git checkout -- <文件>   # 从 git 恢复原始 UTF-8 版本
 
 ### 常见陷阱
 
-| 场景 | 问题 | 正确做法 |
-|------|------|----------|
-| PowerShell `-replace` 替换中文 | GBK 终端截断多字节 UTF-8 | 用 `edit` 工具 |
-| `Select-String` 搜索中文 | 管道输出丢失 UTF-8 字节 | 用 `[IO.File]::ReadAllLines()` + UTF8 |
-| `git show` 通过管道查看 | PowerShell 解码 stdout 成 GBK | `git checkout` 写磁盘后用 `read` 看 |
-| `Start-Process` 子进程输出 | stdout 编码随终端 | 避免用子进程输出写文件 |
-| 批量替换版本标签 | PowerShell string 操作对多字节不友好 | 用 `edit` 逐文件处理 |
+| 场景                           | 问题                                 | 正确做法                              |
+| ------------------------------ | ------------------------------------ | ------------------------------------- |
+| PowerShell `-replace` 替换中文 | GBK 终端截断多字节 UTF-8             | 用 `edit` 工具                        |
+| `Select-String` 搜索中文       | 管道输出丢失 UTF-8 字节              | 用 `[IO.File]::ReadAllLines()` + UTF8 |
+| `git show` 通过管道查看        | PowerShell 解码 stdout 成 GBK        | `git checkout` 写磁盘后用 `read` 看   |
+| `Start-Process` 子进程输出     | stdout 编码随终端                    | 避免用子进程输出写文件                |
+| 批量替换版本标签               | PowerShell string 操作对多字节不友好 | 用 `edit` 逐文件处理                  |
 
 ## 违规处理
 

@@ -102,11 +102,11 @@ pythonw "E:\sEMG_B_Project\skills\git-push\git_push.pyw"
 
 常见推送失败原因：
 
-| 错误 | 原因 | 解决 |
-|------|------|------|
-| `non-fast-forward` | 本地落后远程 | 先 `git pull --rebase` 或 `git push --force`（见下方说明） |
-| `could not read Username` | 认证失败 | 检查 GitHub token 或 SSH 密钥 |
-| `Connection refused` / `timeout` | 代理/网络问题 | 检查代理设置 `http://shproxy.asrmicro.com:80` |
+| 错误                             | 原因          | 解决                                                       |
+| -------------------------------- | ------------- | ---------------------------------------------------------- |
+| `non-fast-forward`               | 本地落后远程  | 先 `git pull --rebase` 或 `git push --force`（见下方说明） |
+| `could not read Username`        | 认证失败      | 检查 GitHub token 或 SSH 密钥                              |
+| `Connection refused` / `timeout` | 代理/网络问题 | 检查代理设置 `http://shproxy.asrmicro.com:80`              |
 
 **如何处理 `non-fast-forward`：**
 
@@ -127,15 +127,15 @@ git push origin main
 
 ## 路径配置
 
-| 配置项 | 值 |
-|--------|-----|
-| 项目目录 | `E:\sEMG_B_Project` |
-| Git 可执行文件 | `C:\Git\cmd\git.exe` |
-| 代理 | `http://shproxy.asrmicro.com:80` |
-| 远程 | `origin` |
-| 分支 | `main` |
-| 日志目录 | `E:\sEMG_B_Project\logs\git` |
-| 日志文件格式 | `git_push_YYYYMMDD_HHMMSS.txt` |
+| 配置项         | 值                               |
+| -------------- | -------------------------------- |
+| 项目目录       | `E:\sEMG_B_Project`              |
+| Git 可执行文件 | `C:\Git\cmd\git.exe`             |
+| 代理           | `http://shproxy.asrmicro.com:80` |
+| 远程           | `origin`                         |
+| 分支           | `main`                           |
+| 日志目录       | `E:\sEMG_B_Project\logs\git`     |
+| 日志文件格式   | `git_push_YYYYMMDD_HHMMSS.txt`   |
 
 ---
 

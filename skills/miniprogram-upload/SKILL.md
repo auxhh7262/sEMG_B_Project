@@ -50,24 +50,24 @@ pythonw "E:\sEMG_B_Project\skills\miniprogram-upload\miniprogram_upload.pyw" E:\
 
 ## GUI 功能
 
-| 功能 | 说明 |
-|------|------|
-| 自动编译 | 启动后自动检测最近修改的文件，编译并推送预览 |
-| 日志服务器 | HTTP 端口 9876，接收小程序发来的日志 |
-| 实时显示 | GUI 实时显示日志，按级别着色 |
-| 日志保存 | 自动写入 `E:\sEMG_B_Project\logs\mini\mini_log_*.txt` |
-| [Open Logs] | 打开日志目录 |
+| 功能        | 说明                                                  |
+| ----------- | ----------------------------------------------------- |
+| 自动编译    | 启动后自动检测最近修改的文件，编译并推送预览          |
+| 日志服务器  | HTTP 端口 9876，接收小程序发来的日志                  |
+| 实时显示    | GUI 实时显示日志，按级别着色                          |
+| 日志保存    | 自动写入 `E:\sEMG_B_Project\logs\mini\mini_log_*.txt` |
+| [Open Logs] | 打开日志目录                                          |
 
 ## 颜色标签
 
-| 标签 | 颜色 | 用途 |
-|------|------|------|
-| BOOT | 青蓝 `#66ccff` | 启动/状态切换 |
-| INFO | 浅蓝 `#00ccff` | 普通日志 |
-| COMPILE | 深蓝 `#00aaff` | 编译/上传 |
-| WARN | 黄色 `#ffcc00` | 警告 |
-| ERROR | 红色 `#ff4444` | 错误 |
-| HTTP | 灰色 `#888888` | HTTP 请求 |
+| 标签    | 颜色           | 用途          |
+| ------- | -------------- | ------------- |
+| BOOT    | 青蓝 `#66ccff` | 启动/状态切换 |
+| INFO    | 浅蓝 `#00ccff` | 普通日志      |
+| COMPILE | 深蓝 `#00aaff` | 编译/上传     |
+| WARN    | 黄色 `#ffcc00` | 警告          |
+| ERROR   | 红色 `#ff4444` | 错误          |
+| HTTP    | 灰色 `#888888` | HTTP 请求     |
 
 ---
 
@@ -89,15 +89,15 @@ mini_program_upload.pyw 内部集成了 HTTP 日志服务器，替代了独立�
 
 ### 日志服务器特性
 
-| 特性 | 说明 |
-|------|------|
-| POST 端点 | `http://<ip>:9876/log` |
-| 输入格式 | JSON 单条 `{"level":"INFO","msg":"..."}` / JSON 数组 / `{"logs":[...]}` |
-| CORS | ✅ 支持跨域（`Access-Control-Allow-Origin: *`） |
-| OPTIONS | ✅ 支持预检请求 |
-| 健康检查 | GET `http://<ip>:9876/health` → `{"status":"ok","port":9876}` |
-| 日志过滤 | 内置关键词过滤（`FILTER_KEYWORDS`），不显示/保存含 `LogForward`、`heartbeat`、`ping`、`pong` 的日志 |
-| HTTP 日志静音 | `log_message()` 重写为 pass，避免 HTTP 服务器自己的访问日志污染界面 |
+| 特性          | 说明                                                                                                |
+| ------------- | --------------------------------------------------------------------------------------------------- |
+| POST 端点     | `http://<ip>:9876/log`                                                                              |
+| 输入格式      | JSON 单条 `{"level":"INFO","msg":"..."}` / JSON 数组 / `{"logs":[...]}`                             |
+| CORS          | ✅ 支持跨域（`Access-Control-Allow-Origin: *`）                                                      |
+| OPTIONS       | ✅ 支持预检请求                                                                                      |
+| 健康检查      | GET `http://<ip>:9876/health` → `{"status":"ok","port":9876}`                                       |
+| 日志过滤      | 内置关键词过滤（`FILTER_KEYWORDS`），不显示/保存含 `LogForward`、`heartbeat`、`ping`、`pong` 的日志 |
+| HTTP 日志静音 | `log_message()` 重写为 pass，避免 HTTP 服务器自己的访问日志污染界面                                 |
 
 ### 日志过滤
 
@@ -132,14 +132,14 @@ pythonw "E:\sEMG_B_Project\skills\miniprogram-upload\miniprogram_upload.pyw"
 
 ## 路径配置
 
-| 配置项 | 值 |
-|--------|-----|
-| 小程序目录 | `E:\sEMG_B_Project\mini_program` |
-| CLI 路径 | `D:\Program Files\微信web开发者工具\cli.bat` |
-| 日志目录 | `E:\sEMG_B_Project\logs\mini` |
-| 日志文件格式 | `mini_log_YYYYMMDD_HHMMSS.txt` |
-| 日志服务器端口 | 9876 |
-| 过滤关键词 | `LogForward`, `heartbeat`, `ping`, `pong` |
+| 配置项         | 值                                           |
+| -------------- | -------------------------------------------- |
+| 小程序目录     | `E:\sEMG_B_Project\mini_program`             |
+| CLI 路径       | `D:\Program Files\微信web开发者工具\cli.bat` |
+| 日志目录       | `E:\sEMG_B_Project\logs\mini`                |
+| 日志文件格式   | `mini_log_YYYYMMDD_HHMMSS.txt`               |
+| 日志服务器端口 | 9876                                         |
+| 过滤关键词     | `LogForward`, `heartbeat`, `ping`, `pong`    |
 
 ---
 

@@ -30,7 +30,8 @@ import re
 
 EXCLUDE_DIRS = {
     '.git', 'node_modules', '__pycache__', '.pio', 'vendor', 'dist', 'build',
-    '.workbuddy', 'venv', '.venv', 'env', '.tox', 'site-packages', 'target', 'bin', 'obj'
+    '.workbuddy', 'venv', '.venv', 'env', '.tox', 'site-packages', 'target', 'bin', 'obj',
+    'archive'  # 历史快照目录：刻意保持原貌，不对其表格做任何对齐改动
 }
 EXCLUDE_FILES = {'.DS_Store', 'Thumbs.db'}
 

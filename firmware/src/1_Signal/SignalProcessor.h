@@ -233,7 +233,7 @@ private:
     float m_currentRMS;           // 当前实时RMS
 
     // RMS趋势EMA - 用于检测收缩力变化（力混杂效应）
-    // Phinyomark et al. (2012): MDF随收缩力变化，是疲劳评估的已知混杂因子
+    // Phinyomark et al. (2012)[12]: MDF随收缩力变化，是疲劳评估的已知混杂因子
     float m_rmsTrendEma;           // RMS慢速EMA，作为力稳定性的基准
     uint8_t m_rmsColdStartCnt;     // 冷启动计数（前3帧平均）
     float m_rmsColdStartSum;       // 冷启动累加和

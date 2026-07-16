@@ -238,13 +238,23 @@ pythonw E:\sEMG_B_Project\skills\<skill>\<script>.pyw [项目路径参数] [--cl
 
 当用户说"更新文档"时，更新以下所有文档：
 
+#### 代码 ↔ 文档映射（判断改哪份文档）
+
+| 代码/功能                        | 关联文档        |
+| -------------------------------- | --------------- |
+| `firmware/*.cpp` / `firmware/*.h` | 软件设计.md     |
+| `firmware/SignalProcessor.cpp`   | 肌电算法说明.md |
+| `firmware/src/0_Base/Board.h`    | 硬件说明.md     |
+| `mini_program/pages/*`           | 软件设计.md     |
+| `mini_program/app.js`            | 软件设计.md     |
+| `cloudfunctions/*`               | 软件设计.md（云端章节） |
+
 #### 项目级文档（E:\sEMG_B_Project\docs\）
 
 | 文档                | 说明                 |
 | ------------------- | -------------------- |
-| 腕带系统架构.md   | 固件+小程序架构+云开发配置 |
-| 腕带小程序设计.md | 4个页面详细设计              |
-| 腕带硬件说明.md   | 硬件相关说明                |
+| 软件设计.md     | 固件+小程序架构+云开发配置（原系统架构.md与小程序设计.md已合并） |
+| 硬件说明.md     | 硬件相关说明                |
 | 肌电算法说明.md   | 算法相关说明                |
 
 #### Skill 文档（E:\sEMG_B_Project\skills\）
@@ -252,22 +262,20 @@ pythonw E:\sEMG_B_Project\skills\<skill>\<script>.pyw [项目路径参数] [--cl
 | 文档                          | 说明               |
 | ----------------------------- | ------------------ |
 | README.md                     | Skill 体系使用指南 |
+| docx-toolkit/SKILL.md         | Markdown→Word/PPT/PDF 文档生成与格式处理 |
+| md-table-align/SKILL.md       | Markdown 表格按显示宽度对齐 |
 | firmware-upload/SKILL.md      | 固件上传           |
 | miniprogram-upload/SKILL.md   | 小程序编译         |
 | workflow/SKILL.md             | 组合工作流         |
 | git-push/SKILL.md             | Git 推送           |
 | cloudfunction-deploy/SKILL.md | 云函数部署         |
-
-#### 索引文档
-
-| 文档        | 说明       |
-| ----------- | ---------- |
-| 文档索引.md | 本索引文件 |
+| cnki-download/SKILL.md        | CNKI 文献下载      |
+| web-login/SKILL.md            | 网页登录/会话保持  |
 
 ### 更新流程
 
 1. 用户说"更新文档"
-2. AI 根据 `E:\sEMG_B_Project\docs\文档索引.md` 更新所有上述文档
+2. AI 根据本节「代码↔文档映射」与更新清单，更新上述所有文档
 3. AI 提交更改到 GitHub（"docs: 更新文档 (日期)"）
 4. AI 同步规则文件到各 AI Agent
 

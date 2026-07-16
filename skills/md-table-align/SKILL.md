@@ -49,6 +49,7 @@ python align.pyw ./README.md
 ## 行为约定
 
 - **自动排除**依赖缓存/自动生成目录：`.git`、`node_modules`、`__pycache__`、`.pio`、`vendor`、`dist`、`build`、`.workbuddy`、`venv`、`.venv` 等。
+- **额外排除 `archive/`**：本项目的 `docs/archive/` 为历史快照目录，刻意保持原貌，**不对其中的表格做任何对齐改动**（已加入 `EXCLUDE_DIRS`）。如需对齐归档文档，请显式传入单个文件路径。
 - **保留换行符**：原文件是 CRLF 还是 LF 都原样保留，不会造成整文件 diff。
 - **幂等**：已对齐的文件不会被改写；二次运行写入 0 个文件，可作为对齐校验。
 - **不改动内容**：

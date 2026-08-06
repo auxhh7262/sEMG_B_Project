@@ -57,6 +57,20 @@ GUI 特点：
 双击 E:\sEMG_B_Project\skills\git-push\git_push.pyw
 ```
 
+### 方式三：回溯补日志（手动 git 后补救）
+
+如果之前绕过了 skill 直接用命令行执行了 git commit/push，可以用此方式补生成日志：
+
+```powershell
+# 为最近一次 commit 补日志
+python "E:\sEMG_B_Project\skills\git-push\git_push.pyw" --retroactive
+
+# 为指定 commit 补日志（支持 HEAD / commit hash / tag）
+python "E:\sEMG_B_Project\skills\git-push\git_push.pyw" --retroactive 87d2669
+```
+
+> **重要**：AI Agent 在执行手动 git 操作后，应自动调用此命令补日志，确保 `logs/git/` 日志完整。
+
 ---
 
 ## 两种模式
@@ -67,6 +81,9 @@ pythonw "E:\sEMG_B_Project\skills\git-push\git_push.pyw"
 
 # CLI 模式（命令行输出）
 python "E:\sEMG_B_Project\skills\git-push\git_push.pyw" --cli
+
+# 回溯补日志模式（为已有 commit 生成日志文件）
+python "E:\sEMG_B_Project\skills\git-push\git_push.pyw" --retroactive [commit_ref]
 
 # 指定项目目录
 pythonw "E:\sEMG_B_Project\skills\git-push\git_push.pyw" E:\sEMG_B_Project
@@ -140,6 +157,16 @@ git push origin main
 ---
 
 ## 常见问题
+
+### 日志中中文文件名显示为乱码（`\345\237\272` 这种）
+
+这是 Git 对非 ASCII 路径的八进制转义输出。skill 已内置自动解码（`core.quotepath=false` + 后处理解码器），正常 GUI/CLI 模式下不再出现此问题。
+
+如果看到旧日志有乱码，可用 `--retroactive` 重新生成一份干净的：
+
+```powershell
+python "E:\sEMG_B_Project\skills\git-push\git_push.pyw" --retroactive
+```
 
 ### 推送失败（代理问题）
 

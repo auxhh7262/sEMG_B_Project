@@ -116,7 +116,27 @@ _STATUS_LABELS = {
     'C': 'Copied',
     'U': 'Unmerged',
     'T': 'Type-changed',
+    '??': 'Untracked',
 }
+
+
+def _effective_status(line):
+    """Collapse git porcelain's two-column XY status into one effective letter.
+
+    Porcelain v1 emits 'XY filename' where X=index status, Y=worktree status.
+    A staged edit is 'M ' (X=M), an unstaged edit is ' M' (Y=M), a fully
+    modified file in both is 'MM'. Taking the first non-space column collapses
+    all of these to 'M' so they group together instead of splitting into
+    '[Modified]' vs '[ ]' (space-prefixed) groups.
+
+    '??' (untracked) is preserved as-is.
+    """
+    if line.startswith('??'):
+        return '??'
+    for ch in line[:2]:
+        if ch != ' ':
+            return ch
+    return '??'
 
 
 def group_status_lines(lines):
@@ -128,7 +148,7 @@ def group_status_lines(lines):
     groups = {}
     order = []
     for line in lines:
-        code = line[0] if line else '?'
+        code = _effective_status(line)
         if code not in groups:
             groups[code] = []
             order.append(code)

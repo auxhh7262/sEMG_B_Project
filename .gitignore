@@ -48,6 +48,11 @@ _tmp_*/
 *.log
 debug.log
 
+# docx-toolkit 运行时产物（临时中间文件 + 进程锁，不应入库）
+.toolkit.lock
+docs/_tmp_*
+docs/tmp*
+
 # ---------- 私有配置 (含环境 ID / 密钥) ----------
 project.private.config.json
 cloudbaserc.json

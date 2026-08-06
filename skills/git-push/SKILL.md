@@ -1,6 +1,6 @@
 ﻿---
 name: git-push
-description: sEMG项目Git提交推送工具（GUI版本）。当用户说"提交代码"/"推送代码"/"git push"/"保存代码"/"提交到GitHub"时，启动GUI窗口执行完整流程（设置代理→检测变更→add→commit→push→清除代理）。触发后自动弹出"sEMG Git Push Tool"窗口，无需手动操作。
+description: sEMG项目Git提交推送工具（GUI版本）。当用户说"提交代码"/"推送代码"/"git push"/"保存代码"/"提交到GitHub"时，启动GUI窗口执行完整流程（网络自适应→检测变更→add→commit→push→清理网络）。触发后自动弹出"sEMG Git Push Tool"窗口，无需手动操作。
 ---
 
 # git-push
@@ -26,11 +26,11 @@ sEMG 项目 Git 提交推送工具（GUI + CLI 双模式）。
 
 1. **检测变更** — 检查 `E:\sEMG_B_Project` 的 Git 状态，列出变更文件
 2. **显示仓库地址** — 显示远端仓库 URL
-3. **设置代理** — 设置 `http://shproxy.asrmicro.com:80`（公司网络需要）
+3. **网络自适应** — 自动检测公司代理 `http://shproxy.asrmicro.com:80` 是否可达：可达则走代理推送；不可达（如家庭/外网）则直接推送，无需代理
 4. **提交代码** — `git add -A` + 自动生成 commit 消息（时间戳）
 5. **推送远程** — `git push origin main`
 6. **显示错误详情** — 如果推送失败，逐行显示 git 实际错误信息（如 `non-fast-forward`）
-7. **清除代理** — 推送完成后清除代理设置
+7. **清理网络** — 推送完成后清理代理环境变量（不再改动全局 git 配置，避免崩溃后代理泄漏污染本机其它仓库）
 
 GUI 特点：
 - 深色终端风格界面
@@ -168,11 +168,20 @@ git push origin main
 python "E:\sEMG_B_Project\skills\git-push\git_push.pyw" --retroactive
 ```
 
-### 推送失败（代理问题）
+### 不在公司网络时需要代理吗？
 
-公司网络需要代理访问 GitHub。Skill 会自动设置代理，推送完成后清除。
+不需要。Skill 会自动检测公司代理主机 `shproxy.asrmicro.com:80` 是否可达：
 
-如果推送失败，可以手动设置代理：
+- **在公司网络（代理可达）**：自动走代理推送。
+- **不在公司网络（代理不可达，如家里/外网）**：自动改为直连推送，不设置任何代理。
+
+如果首选模式失败，Skill 会自动在两种模式间重试（代理失败则试直连，反之亦然），并把实际使用的模式写入日志（`Push SUCCESS! (via proxy/direct ...)`）。
+
+### 推送失败（网络/代理问题）
+
+- Skill **不再修改**全局 `git config --global http.proxy`（旧版会，若中途崩溃可能残留、影响本机其它仓库）。现在仅对当次 `git push` 子进程注入 `http_proxy`/`https_proxy` 环境变量，推送结束即清理，不会污染其它仓库。
+- 启动时会自动清理上一次崩溃可能残留的、指向本公司代理的全局配置（只清我们自己的，不动你其它代理配置）。
+- 若仍失败，可按上方「推送失败错误处理」表格按错误类型排查。必要时手动临时设置代理：
 ```powershell
 git config --global http.proxy http://shproxy.asrmicro.com:80
 git push origin main

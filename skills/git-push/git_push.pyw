@@ -9,6 +9,7 @@ Usage:
 import os
 import sys
 import time
+import socket
 
 # Check mode
 CLI_MODE = '--cli' in sys.argv
@@ -43,6 +44,8 @@ PROXY = "http://shproxy.asrmicro.com:80"
 REMOTE = "origin"
 BRANCH = "main"
 
+PROXY_ENV = {}  # current network-mode proxy env, populated by setup_network()
+
 LOG_DIR = Path(r"E:\sEMG_B_Project\logs\git")
 os.makedirs(LOG_DIR, exist_ok=True)
 
@@ -70,11 +73,12 @@ def log_msg(msg):
     with open(LOG_FILE, 'a', encoding='utf-8') as f:
         f.write(f'[{ts}] {msg}\n')
 
-def run_git(*args, check=True, capture=True, cwd=None):
+def run_git(*args, check=True, capture=True, cwd=None, env=None):
     """Run a git command and return result."""
     cmd = [GIT_EXE] + list(args)
     work_dir = str(cwd or PROJECT_DIR)
-    env = os.environ.copy()
+    if env is None:
+        env = os.environ.copy()
     if capture:
         result = subprocess.run(
             cmd, cwd=work_dir, env=env, capture_output=True,
@@ -95,7 +99,7 @@ def _decode_git_quoted_path(s):
     import re
 
     def _replace_octal(m):
-        return bytes(int(oct_str, 8) for oct_str in m.group(1).split('\\')).decode('utf-8', errors='replace')
+        return bytes(int(oct_str, 8) for oct_str in m.group(1).split('\\') if oct_str).decode('utf-8', errors='replace')
 
     # Match quoted paths: "...\ooo\ooo\ooo..." or unquoted \ooo sequences
     # Git porcelain v1 outputs: "path" with internal \ooo escapes
@@ -135,16 +139,52 @@ def group_status_lines(lines):
         result.append((code, label, groups[code]))
     return result
 
-def set_proxy():
-    """Set temporary HTTP proxy for GitHub access."""
-    run_git("config", "--global", "http.proxy", PROXY, check=False)
-    return "Set proxy: " + PROXY
+def is_proxy_reachable(url=PROXY, timeout=3.0):
+    """Return True if the company proxy host is reachable (i.e. on company network)."""
+    try:
+        import urllib.parse
+        p = urllib.parse.urlparse(url)
+        host = p.hostname or ''
+        port = p.port or 80
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except Exception:
+        return False
 
-def clear_proxy():
-    """Clear proxy settings after push."""
-    run_git("config", "--global", "--unset", "http.proxy", check=False)
-    run_git("config", "--global", "--unset", "https.proxy", check=False)
-    return "Cleared proxy"
+
+def _cleanup_leaked_proxy():
+    """Remove any leftover global http(s).proxy pointing to our company proxy
+    (e.g. from a previous run that crashed before clearing). Leaves any other
+    user proxy config untouched."""
+    for key in ('http.proxy', 'https.proxy'):
+        r = run_git("config", "--global", "--get", key, check=False, capture=True)
+        if r.returncode == 0 and PROXY in (r.stdout or ''):
+            run_git("config", "--global", "--unset", key, check=False)
+
+
+def setup_network():
+    """Detect network mode and prepare proxy env.
+
+    - On company network (proxy host reachable): push via proxy.
+    - Off company network (proxy host unreachable): push directly, no proxy.
+
+    Returns (mode, detail) where mode is 'proxy' or 'direct'.
+    Also cleans up any leaked global proxy config from prior crashed runs.
+    """
+    global PROXY_ENV
+    _cleanup_leaked_proxy()
+    if is_proxy_reachable(PROXY):
+        PROXY_ENV = {'http_proxy': PROXY, 'https_proxy': PROXY}
+        return 'proxy', 'company proxy reachable -> push via proxy'
+    PROXY_ENV = {}
+    return 'direct', 'company proxy unreachable -> push directly (no proxy)'
+
+
+def clear_network():
+    """Reset proxy env. No global git config is left behind."""
+    global PROXY_ENV
+    PROXY_ENV = {}
+    return "Network cleaned."
 
 def get_status():
     """Get git status with proper UTF-8 Chinese filename decoding."""
@@ -177,9 +217,22 @@ def git_commit(message):
     result = run_git("commit", "-m", message)
     return result.returncode == 0
 
-def git_push():
-    """Push to remote. Returns (success, error_message)."""
-    result = run_git("push", REMOTE, BRANCH, check=False)
+def git_push(use_proxy=None):
+    """Push to remote.
+
+    Args:
+        use_proxy: True  -> push via company proxy (set http_proxy/https_proxy env)
+                   False -> push directly (no proxy)
+                   None  -> auto: use current network mode (PROXY_ENV)
+    Returns (success, error_message).
+    """
+    if use_proxy is None:
+        use_proxy = bool(PROXY_ENV)
+    env = os.environ.copy()
+    if use_proxy:
+        env['http_proxy'] = PROXY
+        env['https_proxy'] = PROXY
+    result = run_git("push", REMOTE, BRANCH, check=False, env=env)
     if result.returncode != 0:
         err = result.stderr.strip() or result.stdout.strip() or "Unknown error"
         return False, err
@@ -299,33 +352,44 @@ def cli_mode():
             print(f'    ... and {len(glines) - 10} more')
     
     print()
-    print('[1/5] Setting proxy...')
-    set_proxy()
-    
+    print('[1/5] Setting up network...')
+    mode, detail = setup_network()
+    print(f'  Network: {detail}')
+
     print('[2/4] Adding files...')
     git_add()
-    
+
     print('[3/4] Committing...')
     message = auto_message()
     if not git_commit(message):
-        print('Commit failed!')
-        clear_proxy()
+        print('  Commit failed!')
+        clear_network()
         sys.exit(1)
-    
+
     print(f'  Message: {message}')
     print('[4/4] Pushing...')
-    
-    success, err_msg = git_push()
+
+    success, err_msg = git_push(use_proxy=(mode == 'proxy'))
+    mode_used = mode
+    if not success:
+        if mode == 'proxy':
+            print('  Proxy push failed; retrying directly...')
+            success, err_msg = git_push(use_proxy=False)
+            mode_used = 'direct (fallback)'
+        elif is_proxy_reachable(PROXY):
+            print('  Direct push failed; retrying via proxy...')
+            success, err_msg = git_push(use_proxy=True)
+            mode_used = 'proxy (fallback)'
     if success:
-        print('  Push SUCCESS!')
+        print(f'  Push SUCCESS! (via {mode_used})')
         if remote_url:
             print(f'  Repository: {remote_url}')
     else:
         print(f'  Push FAILED!')
         for line in err_msg.split('\n'):
             print(f'    {line}')
-    
-    clear_proxy()
+
+    clear_network()
     print()
     print('Done!')
 
@@ -393,10 +457,10 @@ def gui_mode():
                 if len(glines) > 15:
                     append(f'    ... and {len(glines) - 15} more', 'GIT')
             
-            set_status('[2/5] Setting proxy...')
-            msg = set_proxy()
-            append(msg, 'GIT')
-            
+            set_status('[2/5] Setting up network...')
+            mode, detail = setup_network()
+            append(f'Network: {detail}', 'GIT')
+
             set_status('[3/5] Committing...')
             git_add()
             message = auto_message()
@@ -404,14 +468,25 @@ def gui_mode():
                 append(f'Committed: {message}', 'GIT')
             else:
                 append('Commit failed!', 'ERROR')
-                clear_proxy()
+                clear_network()
                 set_status('[Failed] Commit error')
                 return
-            
+
             set_status('[4/5] Pushing...')
-            success, err_msg = git_push()
+            success, err_msg = git_push(use_proxy=(mode == 'proxy'))
+            mode_used = mode
+            if not success:
+                # Fallback: try the opposite network mode
+                if mode == 'proxy':
+                    append('Proxy push failed; retrying directly...', 'WARN')
+                    success, err_msg = git_push(use_proxy=False)
+                    mode_used = 'direct (fallback)'
+                elif is_proxy_reachable(PROXY):
+                    append('Direct push failed; retrying via proxy...', 'WARN')
+                    success, err_msg = git_push(use_proxy=True)
+                    mode_used = 'proxy (fallback)'
             if success:
-                append('Push SUCCESS!', 'GIT')
+                append(f'Push SUCCESS! (via {mode_used})', 'GIT')
                 append(f'Repository: {remote_url}', 'INFO')
                 set_status('[Success] Pushed to remote')
             else:
@@ -419,15 +494,15 @@ def gui_mode():
                 for line in err_msg.split('\n'):
                     append(f'  {line}', 'ERROR')
                 set_status('[Failed] Push error')
-            
-            clear_proxy()
-            append('Proxy cleared.', 'GIT')
+
+            clear_network()
+            append('Network cleaned.', 'GIT')
             
         except Exception as e:
             append(f'ERROR: {e}', 'ERROR')
             set_status('[Failed]')
             try:
-                clear_proxy()
+                clear_network()
             except:
                 pass
     

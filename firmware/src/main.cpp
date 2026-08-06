@@ -202,7 +202,7 @@ void setup() {
     SERIAL_COMM.begin(115200);
     while (!SERIAL_COMM && millis() < 3000);
 
-    LOG("\n\n========== sEMG V3.0 CLOUD BOOT ==========\n");
+    LOG("\n\n========== sEMG V" FIRMWARE_VERSION " CLOUD BOOT ==========\n");
 
     pinMode(PIN_LED_BUILTIN, OUTPUT);
     digitalWrite(PIN_LED_BUILTIN, LOW);

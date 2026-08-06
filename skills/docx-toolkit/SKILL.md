@@ -1,6 +1,6 @@
 ---
 name: docx-toolkit
-description: "Markdown -> Word 文档转换工具集：MD→Word（技术文档，深蓝网格表）与 MD→论文版Word（三线表）两种输出。两者排版（页面 A4/页码、宋体小四正文、黑体标题、公式编号、图名）完全一致，唯一区别是表格样式。触发词：'md转word'、'markdown转docx'、'生成docx'、'论文格式word'。支持双击 GUI 与 CLI 双模式；论文格式要求依据 docs/论文  文档格式 2019-10-23.doc。"
+description: "Markdown -> Word 文档转换工具集：MD→Word（技术文档，深蓝网格表）与 MD→论文版Word（三线表）两种输出。两者排版（页面 A4/页码、宋体小四正文、黑体标题、公式编号、图名）完全一致，唯一区别是表格样式。触发词：'md转word'、'markdown转docx'、'生成docx'、'论文格式word'。支持双击 GUI 与 CLI 双模式；论文格式要求依据 docs/资料/格式模板/ 下的拆分规范 02-论文格式与结构规范.docx、03-论文排版与参考文献规范.docx（原「论文 文档格式 2019-10-23.doc」已拆分为 01~05 共 5 份规范）。"
 ---
 
 # docx-toolkit — Markdown → Word 转换工具集
@@ -10,7 +10,7 @@ description: "Markdown -> Word 文档转换工具集：MD→Word（技术文档�
 - MD → Word（技术文档：**深蓝网格表**；其余排版与论文版完全相同）
 - MD → 论文版 Word（**三线表**；页面 A4/页码、宋体小四、黑体标题、公式编号、图名与 tech 完全相同，唯独表格为三线表）
 
-> **论文格式要求**：从 Markdown 生成 Word 时即按 `docs/论文  文档格式 2019-10-23.doc` 的规范套用字体、段落间距等（见下「论文模式」）。
+> **论文格式要求**：从 Markdown 生成 Word 时即按 `docs/资料/格式模板/02-论文格式与结构规范.docx`、`03-论文排版与参考文献规范.docx` 的规范套用字体、段落间距等（原「论文 文档格式 2019-10-23.doc」已拆分为 01~05 共 5 份规范，见下「论文模式」）。
 
 ## 功能矩阵
 
@@ -21,7 +21,7 @@ description: "Markdown -> Word 文档转换工具集：MD→Word（技术文档�
 
 ## 论文模式（paper）
 
-依据 `docs/论文  文档格式 2019-10-23.doc`（科创比赛论文规范）实现，适用于 `to-docx --style paper` 与 GUI「MD→论文版」按钮。
+依据 `docs/资料/格式模板/02-论文格式与结构规范.docx`、`03-论文排版与参考文献规范.docx`（科创比赛论文规范，由原「论文 文档格式 2019-10-23.doc」拆分而来）实现，适用于 `to-docx --style paper` 与 GUI「MD→论文版」按钮。
 
 > ⚠️ **tech 与 paper 共用同一套 `_apply_shared_style`**：下方「页面 / 字体 / 公式 / 图名」规则**两者完全相同**，并非 paper 独有。两种模式的**唯一区别就是表格样式**（见「表格」项）。
 
@@ -45,7 +45,8 @@ description: "Markdown -> Word 文档转换工具集：MD→Word（技术文档�
 双击 `docx-toolkit.pyw` → 弹出集成窗口：
 
 - **第一行单选功能**：MD→Word / MD→论文版（样式由所选功能决定，无独立样式框）
-- 勾选「批量模式」后，输入路径选目录，对整个目录下所有 `.md` 批量转换（与第一行复选）
+- 勾选「批量模式」后，输入路径选目录，对整个目录下所有 `.md` 批量转换（与第一行复选）；**自动跳过 `研究日志.md`**，它必须由 research-log-docx skill 单独转换（否则生成错误文档）
+- 单文件模式若误选 `研究日志.md`，会提示「请改用 research-log-docx skill」并中止，不会生成错误文档
 - 选择输入/输出路径 → 点「开始转换」
 
 ### 命令行
@@ -59,7 +60,7 @@ pythonw ...\docx-toolkit.pyw to-docx 输入.md -o 输出.docx --style paper
 
 # 批量：多文件 / 目录 / 通配（-o 此时为“输出目录”，逐个派生同名 .docx）
 pythonw ...\docx-toolkit.pyw to-docx a.md b.md -o 输出目录\
-pythonw ...\docx-toolkit.pyw to-docx docs\ -o 输出目录\ --style paper   # 目录只扫单层 *.md，不递归
+pythonw ...\docx-toolkit.pyw to-docx docs\ -o 输出目录\ --style paper   # 目录只扫单层 *.md、不递归，且自动跳过「研究日志*.md」（由 research-log-docx skill 处理）
 pythonw ...\docx-toolkit.pyw to-docx "docs\*.md" -o 输出目录\
 ```
 

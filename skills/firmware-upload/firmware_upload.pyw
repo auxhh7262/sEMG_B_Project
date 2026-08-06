@@ -4,7 +4,7 @@ sEMG Firmware Upload Tool (All-in-One)
 Usage:
   - Double-click .pyw file: GUI mode (no console window)
   - Command line with --cli: CLI mode (no GUI, output to console)
-  - OpenClaw trigger: GUI mode (launched via os.startfile() or pythonw)
+  - AI Agent trigger: GUI mode (launched via os.startfile() or pythonw)
 """
 import os
 import sys

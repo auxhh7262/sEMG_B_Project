@@ -4,7 +4,7 @@ sEMG Mini Program Compile + Log Server Tool (All-in-One)
 Usage:
   - Double-click .pyw file: GUI mode (no console window)
   - Command line with --cli: CLI mode (no GUI, output to console)
-  - OpenClaw trigger: GUI mode
+  - AI Agent trigger: GUI mode
 
 Architecture:
   - Firmware uploads data via HTTPS POST to cloud functions (dataIngest)

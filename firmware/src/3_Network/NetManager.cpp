@@ -1,6 +1,7 @@
 // NetManager.cpp — HTTP 云端上传模块
 #include "NetManager.h"
 #include "0_Base/Logger.h"
+#include "0_Base/Config.h"
 #include <EEPROM.h>
 
 NetManager::NetManager()
@@ -455,7 +456,7 @@ bool NetManager::_httpPost(const char* url, const char* jsonBody, String* outBod
     int hdrLen = snprintf(reqHeader, sizeof(reqHeader),
         "POST %s HTTP/1.0\r\n"
         "Host: %s\r\n"
-        "User-Agent: sEMG-FW/3.2\r\n"
+        "User-Agent: sEMG-FW/" FIRMWARE_VERSION "\r\n"
         "Content-Type: application/json\r\n"
         "Content-Length: %lu\r\n"
         "Accept: application/json\r\n"
@@ -579,7 +580,7 @@ bool NetManager::_httpGet(const char* url, String* outBody) {
     int hdrLen = snprintf(reqHeader, sizeof(reqHeader),
         "GET %s HTTP/1.0\r\n"
         "Host: %s\r\n"
-        "User-Agent: sEMG-FW/3.2\r\n"
+        "User-Agent: sEMG-FW/" FIRMWARE_VERSION "\r\n"
         "Accept: application/json\r\n"
         "Connection: close\r\n"
         "\r\n",

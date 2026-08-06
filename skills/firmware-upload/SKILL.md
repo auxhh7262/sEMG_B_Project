@@ -41,7 +41,7 @@ GUI 特点：
 
 ### 方式一：指令触发（推荐）
 
-在 OpenClaw 中说：
+在 AI Agent（QClaw / TRAE / WorkBuddy）中说：
 - "上传固件"
 - "编译上传"
 - "烧录固件"
@@ -68,7 +68,7 @@ pythonw "E:\sEMG_B_Project\skills\firmware-upload\firmware_upload.pyw"
 python "E:\sEMG_B_Project\skills\firmware-upload\firmware_upload.pyw" --cli
 
 # 指定固件目录
-pythonw "E:\sEMG_B_Project\skills\firmware-upload\firmware_upload.pyw" E:\sEMG_C_Project\firmware
+pythonw "E:\sEMG_B_Project\skills\firmware-upload\firmware_upload.pyw" E:\sEMG_B_Project\firmware
 ```
 
 ---

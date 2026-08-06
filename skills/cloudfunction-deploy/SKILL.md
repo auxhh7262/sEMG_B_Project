@@ -33,7 +33,7 @@ GUI 特点：
 
 ### 方式一：指令触发（推荐）
 
-在 OpenClaw 中说：
+在 AI Agent（QClaw / TRAE / WorkBuddy）中说：
 - "部署云函数"
 - "上传云函数"
 

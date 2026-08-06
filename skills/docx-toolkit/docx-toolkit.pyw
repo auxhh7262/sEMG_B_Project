@@ -440,31 +440,40 @@ def _set_math_size(eq_om, half_pt):
         sz.set(qn('w:val'), str(half_pt))
 
 
+def _nil_borders(parent, edges=('top', 'left', 'bottom', 'right',
+                                    'insideH', 'insideV'),
+                 border_tag='tcBorders'):
+    """清除边框。border_tag='tcBorders' 用于单元格，'tblBorders' 用于表格外框。"""
+    b = OxmlElement(f'w:{border_tag}')
+    for edge in edges:
+        e = OxmlElement(f'w:{edge}')
+        e.set(qn('w:val'), 'none'); e.set(qn('w:sz'), '0')
+        e.set(qn('w:space'), '0'); e.set(qn('w:color'), 'auto')
+        b.append(e)
+    parent.append(b)
+
+
+def _zero_margin(parent, edges=('top', 'left', 'bottom', 'right')):
+    """清除单元格边距。"""
+    m = OxmlElement('w:tcMar')
+    for edge in edges:
+        e = OxmlElement(f'w:{edge}'); e.set(qn('w:w'), '0')
+        e.set(qn('w:type'), 'dxa'); m.append(e)
+    parent.append(m)
+
+
 def _build_eq_table(eq_om, num_text, eq_w, num_w, eq_sz=21):
     """构建无框 1×2 表格：左列(eq_w)放公式居中，右列(num_w)放编号右对齐。
     eq_om 为已拆包的行内 <m:oMath> 节点，本函数将其**移动**入左列（不深拷贝），
     规避历史「公式变空白框」的渲染失败。编号恒在页面最右固定列，绝不随公式宽度
     重叠——彻底解决「编号离宽公式太近」问题。"""
-    def _nil_borders(parent, edges=('top', 'left', 'bottom', 'right',
-                                    'insideH', 'insideV')):
-        b = OxmlElement('w:tcBorders')
-        for edge in edges:
-            e = OxmlElement(f'w:{edge}')
-            e.set(qn('w:val'), 'none'); e.set(qn('w:sz'), '0')
-            e.set(qn('w:space'), '0'); e.set(qn('w:color'), 'auto')
-            b.append(e)
-        parent.append(b)
-
-    def _zero_margin(parent, edges=('top', 'left', 'bottom', 'right')):
-        m = OxmlElement('w:tcMar')
-        for edge in edges:
-            e = OxmlElement(f'w:{edge}'); e.set(qn('w:w'), '0')
-            e.set(qn('w:type'), 'dxa'); m.append(e)
-        parent.append(m)
-
     tbl = OxmlElement('w:tbl')
     tblPr = OxmlElement('w:tblPr')
-    _nil_borders(tblPr)
+    # 显式指定内置无边框样式 TableNormal，绕开默认 "Table" 样式（w:default=1）的
+    # 首行(firstRow)条件边框：公式表仅一行，会因此条件格式渲染出下边框。
+    tblStyle = OxmlElement('w:tblStyle'); tblStyle.set(qn('w:val'), 'TableNormal')
+    tblPr.append(tblStyle)
+    _nil_borders(tblPr, border_tag='tblBorders')
     tblW = OxmlElement('w:tblW'); tblW.set(qn('w:w'), str(eq_w + num_w))
     tblW.set(qn('w:type'), 'dxa'); tblPr.append(tblW)
     layout = OxmlElement('w:tblLayout'); layout.set(qn('w:type'), 'autofit')
@@ -690,6 +699,11 @@ def preprocess_md(text):
 
     text = _strip_unsupported_math(text)
 
+    # ---- 交叉引用：.md 后缀 → .docx（最终只交付 Word 文档）----
+    # 同时覆盖链接「显示文字」与「URL」两部分（如 [软件设计.md §1](./软件设计.md#..)
+    # 变成 [软件设计.docx §1](./软件设计.docx#..)），也兼容纯文本中的 .md 引用。
+    text = re.sub(r'\.md\b', '.docx', text)
+
     # ---- 修复 pandoc 不识别的"段落后紧跟列表"和"连续块引用" ----
     # pandoc 要求列表前必须有空行，否则把 "- item" 当作段落内文字吞掉；
     # 同理，连续两行 > 块引用（无空行）会被合并为一段。
@@ -904,6 +918,15 @@ def _cli_out_name(md_path, style):
     return base + ("_论文版.docx" if style == "paper" else ".docx")
 
 
+# 研究日志（课题文档）由独立的 research-log-docx skill 转换（特殊合并单元格表格），
+# 与本文档技能的标准 pandoc 路线不兼容，批量/目录转换时必须跳过，避免生成错误文档。
+RESEARCH_LOG_MD_PREFIX = "研究日志"
+
+def _is_research_log_md(path):
+    """研究日志类 .md 由专用 skill 处理，docx-toolkit 转换时跳过。"""
+    return os.path.basename(path).startswith(RESEARCH_LOG_MD_PREFIX)
+
+
 def _expand_md_inputs(inputs, log):
     """把 CLI input 列表（文件 / 目录 / glob 通配）展开为去重保序的 .md 文件列表。
     目录只扫单层 *.md（与 GUI 批量一致，不递归子目录）。"""
@@ -919,8 +942,12 @@ def _expand_md_inputs(inputs, log):
                 md_files.append(item)
             else:
                 log(f"⚠ 未找到输入: {item}")
+    # 跳过研究日志（由 research-log-docx skill 处理）：与标准 pandoc 路线不兼容
+    kept = [f for f in md_files if not _is_research_log_md(f)]
+    if len(kept) != len(md_files):
+        log(f"⚠ 已跳过 {len(md_files) - len(kept)} 个研究日志 .md（请用 research-log-docx skill 转换）")
     seen = set()
-    return [f for f in md_files if not (f in seen or seen.add(f))]
+    return [f for f in kept if not (f in seen or seen.add(f))]
 
 
 def run_to_docx(args, log):
@@ -928,6 +955,10 @@ def run_to_docx(args, log):
     md_files = _expand_md_inputs(inputs, log)
     if not md_files:
         log("未找到任何 .md 文件")
+        return False
+    # 研究日志由 research-log-docx skill 处理；本 skill 的标准 pandoc 路线无法正确生成，直接拒绝
+    if len(md_files) == 1 and _is_research_log_md(md_files[0]):
+        log("⚠ 研究日志(.md)请改用 research-log-docx skill 转换（本 skill 无法正确生成）。")
         return False
 
     out = args.output
@@ -1185,8 +1216,14 @@ def run_gui():
 
         pat = "*.md"
         files = sorted(glob.glob(os.path.join(target_dir, pat)))
+        # 跳过研究日志（由 research-log-docx skill 处理）：与标准 pandoc 路线不兼容
+        skip = [f for f in files if _is_research_log_md(f)]
+        files = [f for f in files if not _is_research_log_md(f)]
+        if skip:
+            log(f"⚠ 已跳过 {len(skip)} 个研究日志 .md（请用 research-log-docx skill 转换）："
+                + "、".join(os.path.basename(f) for f in skip))
         if not files:
-            log(f"未找到文件: {target_dir}/{pat}")
+            log(f"未找到可转换的 .md 文件: {target_dir}（研究日志已由专用 skill 处理）")
             return
         log(f"批量模式：共 {len(files)} 个文件 -> {os.path.abspath(out_dir)}")
         for f in files:
@@ -1213,6 +1250,13 @@ def run_gui():
                 out_dir = out_e.get().strip() or target_dir
                 _run_batch(mode, target_dir, out_dir, res, log)
             else:
+                if _is_research_log_md(inp):
+                    messagebox.showwarning(
+                        "请改用专用 skill",
+                        "研究日志(.md)由独立的 research-log-docx skill 转换（特殊合并单元格表格），\n"
+                        "本 skill 的标准 pandoc 路线无法正确生成。请改用 research-log-docx。")
+                    log("⚠ 已拒绝转换研究日志（请用 research-log-docx skill）。")
+                    return
                 outp = out_e.get().strip() or _derive_output(inp, mode)
                 _run_single(mode, inp, outp, res, log)
         except Exception as e:

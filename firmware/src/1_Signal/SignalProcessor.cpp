@@ -485,21 +485,21 @@ float SignalProcessor::calculateMDF() {
         m_consecutivePhysioFrames++;
         // ========== MDF EMA α 取值依据 ==========
         // 参考文献:
-        // [6] De Luca CJ. The use of surface electromyography in biomechanics.
+        // [9] De Luca CJ. The use of surface electromyography in biomechanics.
         //     J Applied Biomechanics, 1997, 13(2):135-163.
         //     → 确立 MDF 为肌肉疲劳评估金标准；推荐使用 0.5-2s 窗口进行频谱估计
-        // [7] Merletti R, Knaflitz M, De Luca CJ. Myoelectric manifestations of
+        // [10] Merletti R, Knaflitz M, De Luca CJ. Myoelectric manifestations of
         //     fatigue in voluntary and electrically elicited contractions.
         //     J Applied Physiology, 1990, 69(5):1810-1820.
         //     → 证实疲劳过程中 MDF 呈单调下降趋势，下降速率与收缩强度相关
-        // [8] Merletti R, Parker PA. Electromyography: Physiology, Engineering,
+        // [11] Merletti R, Parker PA. Electromyography: Physiology, Engineering,
         //     and Non-Invasive Applications. IEEE Press/Wiley, 2004.
         //     → Ch.9: 频谱估计中 EMA 为实时嵌入式系统的推荐平滑方法
         //
         // α 选择策略：
-        // - 收缩期/MDF下降期 α=0.35: 文献[7]表明 MDF 在疲劳时可快速下降
+        // - 收缩期/MDF下降期 α=0.35: 文献[10]表明 MDF 在疲劳时可快速下降
         //   10-30%，需要较大 α 快速跟踪变化，等效时间常数 ≈3帧(150ms)
-        // - 稳态期 α=0.15: 对应 0.5-2s 平滑窗口[6]，抑制逐帧波动
+        // - 稳态期 α=0.15: 对应 0.5-2s 平滑窗口[9]，抑制逐帧波动
         // - 启动过渡(0.5→0.15): 前10帧从快速收敛过渡到稳态平滑，
         //   避免初始值偏差导致的长时间收敛等待
         // ===========================================
@@ -759,24 +759,24 @@ void SignalProcessor::updateFatigue(float rms, float mdf) {
     // 避免监测阶段动态基线捕获时机过早导致的负值问题。
     //
     // 参考文献:
-    // [9] Cifrek M, Medved V, Tonković S, Ostojić S. Surface EMG based
+    // [12] Cifrek M, Medved V, Tonković S, Ostojić S. Surface EMG based
     //     muscle fatigue evaluation in biomechanics.
     //     Clinical Biomechanics, 2009, 24(4):327-340.
     //     → 归一化MDF下降率为标准疲劳指数
-    // [10] González-Izal M, Malanda A, Gorostiaga E, Izquierdo M.
+    // [13] González-Izal M, Malanda A, Gorostiaga E, Izquierdo M.
     //     Electromyographic models to assess muscle fatigue.
     //     J Electromyography and Kinesiology, 2012, 22(4):501-512.
     //     → 验证MDF下降率与主观疲劳量表(Borg)呈显著相关(r>0.7)
     //
     // α=0.3 选择依据:
-    // - Phinyomark 2012: 实时疲劳监测推荐α=0.2-0.4以平衡响应速度和稳定性[12]
+    // - Phinyomark 2012: 实时疲劳监测推荐α=0.2-0.4以平衡响应速度和稳定性[15]
     // - De Luca 1997: 频谱参数EMA时间常数建议0.5-2s，α=0.3对应约0.33s
     // - α=0.3 对应时间常数≈3帧(0.33s)，既快速响应真实变化，又抑制逐帧抖动
-    // - 当MDF超过activeMDF时f_raw限制为0，避免生理上不合理的负值(Cifrek 2009)[9]
+    // - 当MDF超过activeMDF时f_raw限制为0，避免生理上不合理的负值(Cifrek 2009)[12]
     //
     // ========== Recovery Model ==========
     // During relaxation, fatigue recovers exponentially based on:
-    // [11] Elfving B, et al. Recovery of electromyographic median frequency
+    // [14] Elfving B, et al. Recovery of electromyographic median frequency
     // after lumbar muscle fatigue. Eur J Appl Physiol, 2002, 88:85-93.
     //   → MDF recovery half-life ≈ 35s (r²=0.98, n=55)
     //

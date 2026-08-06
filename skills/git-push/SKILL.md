@@ -44,7 +44,7 @@ GUI 特点：
 
 ### 方式一：指令触发（推荐）
 
-在 OpenClaw 中说：
+在 AI Agent（QClaw / TRAE / WorkBuddy）中说：
 - "提交代码"
 - "推送代码"
 - "git push"
@@ -69,7 +69,7 @@ pythonw "E:\sEMG_B_Project\skills\git-push\git_push.pyw"
 python "E:\sEMG_B_Project\skills\git-push\git_push.pyw" --cli
 
 # 指定项目目录
-pythonw "E:\sEMG_B_Project\skills\git-push\git_push.pyw" E:\sEMG_C_Project
+pythonw "E:\sEMG_B_Project\skills\git-push\git_push.pyw" E:\sEMG_B_Project
 ```
 
 无 `-m` / `--dry-run` 参数支持（提交消息自动生成时间戳）。

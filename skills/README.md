@@ -1,6 +1,6 @@
 # sEMG Skill 体系使用指南
 
-> 版本：v1.3 | 更新：2026-07-13
+> 版本：v1.4 | 更新：2026-08-06
 > **所有 AI Agent（QClaw / TRAE / WorkBuddy）共享的技能脚本**
 
 ---
@@ -21,7 +21,7 @@
 
 ## 概述
 
-**E:\sEMG_B_Project\skills** 是 sEMG 项目所有 AI Agent 的共享工具目录，包含 5 个自动化 Skill，覆盖固件上传、小程序编译、云函数部署、Git 推送和组合工作流。
+**E:\sEMG_B_Project\skills** 是 sEMG 项目所有 AI Agent 的共享工具目录，包含 9 个自动化 Skill，覆盖固件上传、小程序编译、云函数部署、Git 推送、组合工作流，以及文档转换 / 表格对齐 / 文献检索等写作支撑能力。
 
 **特性：**
 - 所有脚本使用 `.pyw` 扩展名（无控制台窗口）
@@ -33,26 +33,36 @@
 
 ## Skill 列表
 
-| Skill                    | 路径                                             | 功能                      |
-| ------------------------ | ------------------------------------------------ | ------------------------- |
-| **firmware-upload**      | `E:\sEMG_B_Project\skills\firmware-upload\`      | 固件编译上传 + 串口监控   |
-| **miniprogram-upload**   | `E:\sEMG_B_Project\skills\miniprogram-upload\`   | 小程序编译 + 日志服务器   |
-| **cloudfunction-deploy** | `E:\sEMG_B_Project\skills\cloudfunction-deploy\` | 微信云函数批量部署        |
-| **git-push**             | `E:\sEMG_B_Project\skills\git-push\`             | Git 提交 + 推送           |
-| **workflow**             | `E:\sEMG_B_Project\skills\workflow\`             | 组合工作流（固件→小程序） |
+| Skill                    | 路径                                             | 功能                                       |
+| ------------------------ | ------------------------------------------------ | ------------------------------------------ |
+| **firmware-upload**      | `E:\sEMG_B_Project\skills\firmware-upload\`      | 固件编译上传 + 串口监控                    |
+| **miniprogram-upload**   | `E:\sEMG_B_Project\skills\miniprogram-upload\`   | 小程序编译预览 + 日志采集                  |
+| **cloudfunction-deploy** | `E:\sEMG_B_Project\skills\cloudfunction-deploy\` | 微信云函数批量部署                         |
+| **git-push**             | `E:\sEMG_B_Project\skills\git-push\`             | Git 提交 + 推送                            |
+| **workflow**             | `E:\sEMG_B_Project\skills\workflow\`             | 组合工作流（固件→小程序）                  |
+| **docx-toolkit**         | `E:\sEMG_B_Project\skills\docx-toolkit\`         | Markdown→Word 转换（技术文档 / 论文版）    |
+| **md-table-align**       | `E:\sEMG_B_Project\skills\md-table-align\`       | Markdown 表格 + 盒子绘图按显示宽度对齐     |
+| **cnki-search-gui**      | `E:\sEMG_B_Project\skills\cnki-search-gui\`      | 知网文献检索（驱动 Edge，单文件）          |
+| **research-log-docx**    | `E:\sEMG_B_Project\skills\research-log-docx\`    | 研究日志 Markdown→Word（固化排版规则）     |
+
+> 已移除（不再维护）：`cnki-download`、`web-login`。
 
 ---
 
 ## 触发词速查表
 
-| 操作       | 触发词                                          |
-| ---------- | ----------------------------------------------- |
-| 上传固件   | "上传固件" / "编译上传" / "烧录固件" / "刷固件" |
-| 编译小程序 | "编译小程序" / "预览小程序" / "上传小程序"      |
-| 部署云函数 | "部署云函数" / "上传云函数" / "部署 CF"         |
-| Git 推送   | "提交代码" / "git push" / "推送代码"            |
-| 一键部署   | "上传并编译" / "一键部署" / "deploy"            |
-| 分析日志   | "分析" / "分析日志" / "查日志"                  |
+| 操作           | 触发词                                                                          |
+| -------------- | ------------------------------------------------------------------------------- |
+| 上传固件       | "上传固件" / "编译上传" / "烧录固件" / "刷固件"                                 |
+| 编译小程序     | "编译小程序" / "预览小程序" / "上传小程序"                                       |
+| 部署云函数     | "部署云函数" / "上传云函数" / "部署 CF"                                          |
+| Git 推送       | "提交代码" / "git push" / "推送代码"                                             |
+| 一键部署       | "上传并编译" / "一键部署" / "deploy"                                             |
+| 文档转 Word    | "md转word" / "markdown转docx" / "生成docx" / "论文格式word"                      |
+| 对齐表格       | "对齐 markdown 表格" / "md 表格竖线没对齐" / "把 xxx 目录下的 md 表格对齐"        |
+| 知网检索       | "知网检索" / "搜知网" / "知网文献搜索" / "找知网论文"                            |
+| 研究日志转档   | "研究日志转word" / "生成研究日志docx" / "md转研究日志"                           |
+| 分析日志       | "分析" / "分析日志" / "查日志"                                                  |
 
 ---
 
@@ -66,13 +76,17 @@ pythonw E:\sEMG_B_Project\skills\<skill-name>\<script>.pyw [参数] [--cli]
 
 ### 各 Skill 调用命令
 
-| 操作           | 命令                                                                                                                                 | 参数                |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------- |
-| **上传固件**   | `pythonw E:\sEMG_B_Project\skills\firmware-upload\firmware_upload.pyw --cli E:\sEMG_B_Project\firmware`                              | 固件目录            |
-| **编译小程序** | `pythonw E:\sEMG_B_Project\skills\miniprogram-upload\miniprogram_upload.pyw --cli E:\sEMG_B_Project`                                 | 项目目录            |
-| **部署云函数** | `pythonw E:\sEMG_B_Project\skills\cloudfunction-deploy\cloudfunction_deploy.pyw --cli E:\sEMG_B_Project\mini_program\cloudfunctions` | 云函数目录          |
-| **Git 推送**   | `pythonw E:\sEMG_B_Project\skills\git-push\git_push.pyw --cli E:\sEMG_B_Project`                                                     | 项目目录            |
-| **一键部署**   | `pythonw E:\sEMG_B_Project\skills\workflow\workflow.pyw --cli E:\sEMG_B_Project\firmware E:\sEMG_B_Project`                          | 固件目录 + 项目目录 |
+| 操作             | 命令                                                                                                                                                       | 参数                  |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
+| **上传固件**     | `pythonw E:\sEMG_B_Project\skills\firmware-upload\firmware_upload.pyw --cli E:\sEMG_B_Project\firmware`                                                  | 固件目录              |
+| **编译小程序**   | `pythonw E:\sEMG_B_Project\skills\miniprogram-upload\miniprogram_upload.pyw --cli E:\sEMG_B_Project`                                                     | 项目目录              |
+| **部署云函数**   | `pythonw E:\sEMG_B_Project\skills\cloudfunction-deploy\cloudfunction_deploy.pyw --cli E:\sEMG_B_Project\mini_program\cloudfunctions`                      | 云函数目录            |
+| **Git 推送**     | `pythonw E:\sEMG_B_Project\skills\git-push\git_push.pyw --cli E:\sEMG_B_Project`                                                                         | 项目目录              |
+| **一键部署**     | `pythonw E:\sEMG_B_Project\skills\workflow\workflow.pyw --cli E:\sEMG_B_Project\firmware E:\sEMG_B_Project`                                              | 固件目录 + 项目目录   |
+| **MD→Word**      | `pythonw E:\sEMG_B_Project\skills\docx-toolkit\docx-toolkit.pyw to-docx 输入.md -o 输出.docx [--style paper]`                                           | 输入 / 输出 / 样式    |
+| **对齐表格**     | `pythonw E:\sEMG_B_Project\skills\md-table-align\align.pyw E:\sEMG_B_Project [docs skills] [--dry-run]`                                                  | 路径 / 子目录限定     |
+| **知网检索**     | `pythonw E:\sEMG_B_Project\skills\cnki-search-gui\cnki_gui.pyw [--search "关键词"]`                                                                      | 关键词（可选）        |
+| **研究日志转档** | `pythonw E:\sEMG_B_Project\skills\research-log-docx\md_to_research_log_docx.pyw 输入.md [-o 输出.docx]`                                                 | 输入 / 输出           |
 
 ### 两种模式
 
@@ -200,6 +214,9 @@ Skill 自动杀占用 COM4 的进程（pio.exe / platformio.exe）。
 ### Git push 失败
 Skill 会自动显示具体的 git 错误信息（如 `non-fast-forward`、认证失败等）。
 
+### 文档转换后公式变纯文本
+检查 `$$...$$` 块里是否含 `\tag{...}` / `\label{...}`（pandoc 不支持，会被降级）。`docx-toolkit` 会自动剔除这些命令。
+
 ### 分析日志读不到内容
 确保用户已说"分析"，AI Agent 才会读取日志文件。
 
@@ -214,6 +231,10 @@ Skill 会自动显示具体的 git 错误信息（如 `non-fast-forward`、认�
 | cloudfunction-deploy | [`cloudfunction-deploy/SKILL.md`](cloudfunction-deploy/SKILL.md) |
 | git-push             | [`git-push/SKILL.md`](git-push/SKILL.md)                         |
 | workflow             | [`workflow/SKILL.md`](workflow/SKILL.md)                         |
+| docx-toolkit         | [`docx-toolkit/SKILL.md`](docx-toolkit/SKILL.md)                 |
+| md-table-align       | [`md-table-align/SKILL.md`](md-table-align/SKILL.md)             |
+| cnki-search-gui      | [`cnki-search-gui/SKILL.md`](cnki-search-gui/SKILL.md)           |
+| research-log-docx    | [`research-log-docx/SKILL.md`](research-log-docx/SKILL.md)       |
 
 ---
 

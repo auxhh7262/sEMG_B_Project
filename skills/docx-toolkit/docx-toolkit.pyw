@@ -257,14 +257,14 @@ def _clear_table_borders(table):
 
 
 def setup_paper_page(doc):
-    """A4 纸张 + 页边距 + 页脚居中页码（附件要求：全部用 A4、论文要有页码）。"""
+    """A4 纸张 + 页边距 + 页脚居中页码（03-论文排版规范：上/下1in、左/右1.25in）。"""
     sec = doc.sections[0]
     sec.page_width = Cm(21)
     sec.page_height = Cm(29.7)
-    sec.top_margin = Cm(2.5)
-    sec.bottom_margin = Cm(2.5)
-    sec.left_margin = Cm(2.5)
-    sec.right_margin = Cm(2.5)
+    sec.top_margin = Inches(1)           # 上 1in
+    sec.bottom_margin = Inches(1)        # 下 1in
+    sec.left_margin = Inches(1.25)       # 左 1.25in（规范要求）
+    sec.right_margin = Inches(1.25)      # 右 1.25in（规范要求）
     footer = sec.footer
     p = footer.paragraphs[0]
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -366,64 +366,115 @@ def style_tables_threeline(doc):
         _apply_grid_widths(table, twips)
 
 
+def _split_abstract_paragraph(doc, p):
+    """把"摘要：xxx"单段拆分为独立"摘要"标题段 + 摘要正文段。
+
+    规范要求"摘要"为独立标题行（黑体小四加粗），正文另起一段（宋体五号）。
+    pandoc 转出的 md 常把"摘要：本文针对..."写在一个段落里，此函数就地拆分：
+      1. 在原段前插入新段"摘要"（黑体小四12pt加粗）
+      2. 原段清除"摘要："前缀，正文改为宋体五号10.5pt
+    """
+    txt = p.text.strip()
+    # 去掉"摘要："前缀
+    body_text = txt[4:] if txt.startswith('摘要：') else txt[3:]  # 兼容"摘要:"
+    # 原段清空，写入纯正文
+    for r in list(p.runs):
+        r._r.getparent().remove(r._r)
+    r_body = p.add_run(body_text)
+    _set_run_font(r_body, 'Times New Roman', '宋体', size_pt=10.5)
+    p.paragraph_format.line_spacing = 1.5
+    # 在原段前插入"摘要"标题段
+    new_p = p.insert_paragraph_before('')
+    r_label = new_p.add_run('摘要')
+    _set_run_font(r_label, '黑体', '黑体', size_pt=12, bold=True)
+    new_p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    new_p.paragraph_format.line_spacing = 1.5
+
+
 def style_paper_blocks(doc):
-    """首页块（题目/摘要/关键词）+ 参考文献条目字体映射。
+    """首页块（题目/摘要/关键词）+ 参考文献条目字体映射 + 正文run级强制。
 
     排版规范（来自 03-论文排版与参考文献规范.docx）：
-      论文题目/大标题  黑体  小三(15pt)  加粗
+      论文题目/大标题  黑体  小三(15pt)  加粗  居中
       一级标题（一、二、三…）  黑体  小四(12pt)  加粗
-      正文            宋体  小四(12pt)  1.5倍行距
+      正文            宋体(eastAsia)/TNR(ascii)  小四(12pt)  1.5倍行距
+      摘要标题        黑体  小四(12pt)  加粗
       摘要正文        宋体  五号(10.5pt)
+      关键词          宋体  小四(12pt)
       参考文献正文    英文TNR/中文宋体  五号(10.5pt)
-      摘要正文        宋体  五号(10.5pt)
+
+    关键：pandoc 会在 run 级直接写入 rFonts（覆盖样式层），故仅靠
+    setup_paper_fonts() 设 Normal 样式不够，必须在此逐段逐 run 强制。
     """
     seen_title = False
     in_abstract = False          # 状态：是否处于"摘要"标题后的正文区域
+
     for p in doc.paragraphs:
         txt = p.text.strip()
         if not txt:
             continue
         style_name = p.style.name if p.style else ''
-        # ---- 论文题目：黑体小三加粗居中 ----
+        is_heading = style_name.startswith('Heading')
+
+        # ---- 论文题目（首个H1）：黑体小三(15pt)加粗居中 ----
         if (not seen_title) and style_name.startswith('Heading 1'):
             for r in p.runs:
                 _set_run_font(r, '黑体', '黑体', size_pt=15, bold=True)
             p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            p.paragraph_format.line_spacing = 1.5
             seen_title = True
             in_abstract = False
-        # ---- "摘要"/"Abstract" 标签行：黑体小四 ----
-        elif '摘要' in txt or 'Abstract' in txt:
+        # ---- 后续H1（一级章节标题）：黑体小四(12pt)加粗 ----
+        elif seen_title and style_name.startswith('Heading 1'):
             for r in p.runs:
-                _set_run_font(r, '黑体', '黑体', size_pt=12)
-            in_abstract = True       # 后续普通段落进入"摘要正文"区
-        # ---- "关键词"/"Keywords" 行：宋体五号 ----
+                _set_run_font(r, '黑体', '黑体', size_pt=12, bold=True)
+            p.paragraph_format.line_spacing = 1.5
+            in_abstract = False
+        # ---- "摘要：xxx" 单段拆分 → 独立"摘要"标题 + 正文 ----
+        elif seen_title and txt.startswith('摘要：') and len(txt) > 4:
+            _split_abstract_paragraph(doc, p)
+            in_abstract = False
+        # ---- "摘要"/"Abstract" 独立标题行：黑体小四加粗 ----
+        elif txt == '摘要' or txt == 'Abstract' or txt.startswith('摘要：') and len(txt) <= 4:
+            for r in p.runs:
+                _set_run_font(r, '黑体', '黑体', size_pt=12, bold=True)
+            p.paragraph_format.line_spacing = 1.5
+            in_abstract = True
+        # ---- "关键词"/"Keywords" 行：宋体小四(12pt) ----
         elif re.match(r'^关键词|^Keywords', txt):
             for r in p.runs:
-                _set_run_font(r, '宋体', '宋体', size_pt=10.5)   # 五号
-            in_abstract = False       # 摘要区域结束
-        # ---- 参考文献 [n] 条目：TNR/宋体五号 ----
+                _set_run_font(r, 'Times New Roman', '宋体', size_pt=12)
+            p.paragraph_format.line_spacing = 1.5
+            in_abstract = False
+        # ---- 参考文献 [n] 条目：TNR/宋体五号(10.5pt) ----
         elif re.match(r'^\[\d+\]', txt):
             for r in p.runs:
                 _set_run_font(r, 'Times New Roman', '宋体', size_pt=10.5)
+            p.paragraph_format.line_spacing = 1.5
             in_abstract = False
         # ---- 遇到其他标题 → 退出摘要区 ----
-        elif style_name.startswith('Heading'):
+        elif is_heading:
             in_abstract = False
-        # ---- 摘要正文段落：宋体五号（区别于正文的宋体小四）----
+        # ---- 摘要正文段落：宋体五号(10.5pt) ----
         elif in_abstract:
             for r in p.runs:
-                _set_run_font(r, '宋体', '宋体', size_pt=10.5)
+                _set_run_font(r, 'Times New Roman', '宋体', size_pt=10.5)
+            p.paragraph_format.line_spacing = 1.5
+        # ---- 普通正文段落：宋体(eastAsia)/TNR(ascii) 小四(12pt) + 1.5倍行距 ----
+        else:
+            for r in p.runs:
+                _set_run_font(r, 'Times New Roman', '宋体', size_pt=12)
+            p.paragraph_format.line_spacing = 1.5
 
 
 def _text_width_twips(doc):
-    """返回当前节的版心宽度（twips）。两种样式最终均为 A4 + 2.5cm 边距，
-    故直接计算：21cm - 2*2.5cm = 16cm ≈ 9071 twips。"""
+    """返回当前节的版心宽度（twips）。
+    A4(21cm) - 左右1.25in(3.175cm×2) = 14.65cm ≈ 8298 twips。"""
     try:
-        from docx.shared import Cm
-        emu = (Cm(21) - 2 * Cm(2.5))
+        emu = (Cm(21) - 2 * Inches(1.25))
         return int(emu / 635)   # 1 twip = 635 EMU
     except Exception:
-        return 9071
+        return 8298
 
 
 def _set_math_size(eq_om, half_pt):

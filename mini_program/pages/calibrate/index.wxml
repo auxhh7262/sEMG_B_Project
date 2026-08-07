@@ -64,7 +64,7 @@ module.exports.val = val;
       <view class="help-section">
         <text class="help-section-title">佩戴注意事项</text>
         <view class="help-notice-list">
-          <text class="help-notice-item"><text class="notice-label">位置：</text>佩戴在手环标定的位置，对准目标肌肉</text>
+          <text class="help-notice-item"><text class="notice-label">位置：</text>佩戴在臂带标定的位置，对准目标肌肉</text>
           <text class="help-notice-item"><text class="notice-label">松紧：</text>贴合皮肤，避免松动或滑动</text>
           <text class="help-notice-item"><text class="notice-label">姿态：</text>采集时保持手臂静止、不要甩动；两个阶段保持同一握持手势、只差"出不出力"——放松阶段请勿张开手掌，用力阶段请用你真实使用时同样的姿态与力度（握什么、怎么握、使多大劲都照真实场景），别凭空使劲，这样校准值才贴近真实使用、激活度才准确</text>
         </view>

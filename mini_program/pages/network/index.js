@@ -38,8 +38,13 @@ Page({
 
   onLoad() {
     log('[Network] page loaded');
+    wx.setNavigationBarTitle({ title: 'sEMG疲劳预警' });
     this._notifyBound = false;   // onBLECharacteristicValueChange 注册标志，避免重复累积
     this._initBle();
+  },
+
+  onShow() {
+    setTimeout(() => wx.setNavigationBarTitle({ title: 'sEMG疲劳预警' }), 50);
   },
 
   onUnload() {

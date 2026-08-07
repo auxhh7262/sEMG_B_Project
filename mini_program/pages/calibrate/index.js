@@ -45,6 +45,7 @@ Page({
 
   onLoad() {
     logger.log('[calibrate] onLoad');
+    wx.setNavigationBarTitle({ title: 'sEMG疲劳预警' });
     this._initDeviceId();
     this._loadUserProfile();
     this._loadCalibData();
@@ -52,6 +53,7 @@ Page({
 
   onShow() {
     logger.log('[calibrate] onShow');
+    setTimeout(() => wx.setNavigationBarTitle({ title: 'sEMG疲劳预警' }), 50);
     this._loadUserProfile();
     this._checkCloudStatus();
   },

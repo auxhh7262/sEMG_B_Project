@@ -57,6 +57,7 @@ Page({
 
   onLoad() {
     log('[analysis] onLoad');
+    wx.setNavigationBarTitle({ title: 'sEMG疲劳预警' });
     this._initDateRange();
     this._initCanvases();
   },
@@ -64,6 +65,7 @@ Page({
 
   onShow() {
     log('[analysis] onShow');
+    setTimeout(() => wx.setNavigationBarTitle({ title: 'sEMG疲劳预警' }), 50);
     this._tabVisible = true;
     this._checkCloudStatus();
   },

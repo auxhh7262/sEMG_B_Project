@@ -36,6 +36,7 @@ Page({
 
   onLoad() {
     log('[realtime] Cloud onLoad');
+    wx.setNavigationBarTitle({ title: 'sEMG疲劳预警' });
     this._initDeviceId();
     this._loadCalibFromCache();
     this._loadRecentHistory();
@@ -52,6 +53,7 @@ Page({
   },
 
   onShow() {
+    setTimeout(() => wx.setNavigationBarTitle({ title: 'sEMG疲劳预警' }), 50);
     this._tabVisible = true;
     this._loadCalibFromCache();
     if (!this._watcher) this._startWatch();

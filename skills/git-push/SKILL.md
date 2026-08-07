@@ -147,7 +147,7 @@ git push origin main
 | 配置项         | 值                               |
 | -------------- | -------------------------------- |
 | 项目目录       | `E:\sEMG_B_Project`              |
-| Git 可执行文件 | 自动探测（见下方「Git 路径解析」）：优先 `C:\Program Files\Git\cmd\git.exe`，回退 `C:\Git\cmd\git.exe`，再回退 PATH |
+| Git 可执行文件 | 自动探测（见下方「Git 路径解析」）：`C:\Program Files\Git` → `C:\Program Files (x86)\Git` → `%LOCALAPPDATA%\Git`（用户目录独立安装，无需管理员）→ `C:\Git`（GitHubDesktop junction）→ PATH |
 | 代理           | `http://shproxy.asrmicro.com:80` |
 | 远程           | `origin`                         |
 | 分支           | `main`                           |
@@ -198,10 +198,11 @@ git config --global --unset http.proxy
 
 `GIT_EXE` 由 `_resolve_git_exe()` 在启动时自动探测，优先级如下：
 
-1. `C:\Program Files\Git\cmd\git.exe` — 独立 **Git for Windows** 安装（推荐，不受 GitHub Desktop 升级影响）
+1. `C:\Program Files\Git\cmd\git.exe` — 独立 **Git for Windows** 安装（管理员安装，推荐，不受 GitHub Desktop 升级影响）
 2. `C:\Program Files (x86)\Git\cmd\git.exe` — 32 位独立安装
-3. `C:\Git\cmd\git.exe` — GitHub Desktop 创建的 *Junction*（见下方悬空风险）
-4. PATH 中的 `git`
+3. `%LOCALAPPDATA%\Git\cmd\git.exe` — 非管理员装到用户目录的独立 Git（如 `C:\Users\<用户>\AppData\Local\Git`，推荐，无需管理员、不受影响 GitHub Desktop 升级影响）
+4. `C:\Git\cmd\git.exe` — GitHub Desktop 创建的 *Junction*（见下方悬空风险）
+5. PATH 中的 `git`
 
 启动时日志会打印一行 `Git: <路径> (resolves to: <真实路径>)`，可用来确认当前用的是哪个 git、以及符号链接指向哪。
 

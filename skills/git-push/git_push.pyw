@@ -61,6 +61,7 @@ def _resolve_git_exe():
     candidates = [
         r"C:\Program Files\Git\cmd\git.exe",
         r"C:\Program Files (x86)\Git\cmd\git.exe",
+        os.path.expandvars(r"%LOCALAPPDATA%\Git\cmd\git.exe"),
         r"C:\Git\cmd\git.exe",
     ]
     for c in candidates:

@@ -147,7 +147,7 @@ git push origin main
 | 配置项         | 值                               |
 | -------------- | -------------------------------- |
 | 项目目录       | `E:\sEMG_B_Project`              |
-| Git 可执行文件 | `C:\Git\cmd\git.exe`             |
+| Git 可执行文件 | 自动探测（见下方「Git 路径解析」）：优先 `C:\Program Files\Git\cmd\git.exe`，回退 `C:\Git\cmd\git.exe`，再回退 PATH |
 | 代理           | `http://shproxy.asrmicro.com:80` |
 | 远程           | `origin`                         |
 | 分支           | `main`                           |
@@ -191,6 +191,37 @@ git config --global --unset http.proxy
 ### 没有变更
 
 如果项目目录没有 Git 变更，GUI 会显示 "No changes detected"，不会执行提交。
+
+---
+
+### Git 路径解析（为什么不直接写死 `C:\Git`）
+
+`GIT_EXE` 由 `_resolve_git_exe()` 在启动时自动探测，优先级如下：
+
+1. `C:\Program Files\Git\cmd\git.exe` — 独立 **Git for Windows** 安装（推荐，不受 GitHub Desktop 升级影响）
+2. `C:\Program Files (x86)\Git\cmd\git.exe` — 32 位独立安装
+3. `C:\Git\cmd\git.exe` — GitHub Desktop 创建的 *Junction*（见下方悬空风险）
+4. PATH 中的 `git`
+
+启动时日志会打印一行 `Git: <路径> (resolves to: <真实路径>)`，可用来确认当前用的是哪个 git、以及符号链接指向哪。
+
+### git.exe 启动崩溃（0xc0000142 / "应用程序无法正常启动"）
+
+报错形如弹窗「应用程序无法正常启动 (0xc0000142)」或日志里 `git.exe 启动失败（... 疑似 0xc0000142 ...）`。两类根因：
+
+**① 第三方杀毒软件拦截 git.exe（最常见）**
+本机 Windows Defender 实时防护未运行（由第三方杀软接管），可能把 `git.exe`（尤其经 pythonw 无控制台拉起时）误判并阻断，导致 DLL 初始化失败。
+**解决**：把 git.exe 的真实路径加入杀软白名单。先读日志 `Git: ...` 一行确认真实路径（已穿透符号链接显示），例如当前为：
+`C:\Users\honghuang\AppData\Local\GitHubDesktop\app-3.5.12\resources\app\git\cmd\git.exe`。
+建议把整目录 `C:\Users\honghuang\AppData\Local\GitHubDesktop\` 加白名单（版本号会变，加整目录更稳）；或干脆装独立 Git for Windows（见下，装好后路径变 `C:\Program Files\Git`，自然脱离 GitHubDesktop 目录）。
+
+**② `C:\Git` 符号链接悬空**
+`C:\Git` 是 GitHub Desktop 创建的 *Junction*，指向 `...\GitHubDesktop\app-<版本号>\...\git`。GitHub Desktop 自动升级后版本号路径改变，Junction 悬空，`C:\Git\cmd\git.exe` 随之失效。日志 `Git: ...` 行会显示 `[WARNING: target missing -> junction is STALE, reinstall Git for Windows or fix C:\Git]`。
+**解决**：重装/修复 GitHub Desktop，或安装独立 **Git for Windows**（见下，skill 会自动优先使用 `C:\Program Files\Git`，彻底规避 Junction）。
+
+> 注：本 skill 已用 `CREATE_NO_WINDOW` 规避 pythonw 无控制台拉起 `git.exe` 时 Windows 不给分配控制台导致的崩溃；但杀软拦截或 Junction 悬空仍需按上面处理。
+
+**推荐（一劳永逸）**：安装独立 **Git for Windows**（https://git-scm.com/download/win ，默认装到 `C:\Program Files\Git`）。装好后 skill 启动时按上面的优先级自动选中它，无需改任何配置即可生效，且不再受 GitHub Desktop 升级影响。
 
 ---
 

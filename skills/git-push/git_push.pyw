@@ -39,9 +39,64 @@ from pathlib import Path
 # --- Config ---
 DEFAULT_PROJECT = Path(r"E:\sEMG_B_Project")
 PROJECT_DIR = DEFAULT_PROJECT
-GIT_EXE = r"C:\Git\cmd\git.exe"
+
+def _resolve_git_exe():
+    """Resolve the git executable, preferring a standalone Git for Windows
+    install over the GitHub Desktop junction.
+
+    C:\\Git is a *junction* that GitHub Desktop creates pointing into
+    %LOCALAPPDATA%\\GitHubDesktop\\app-<version>\\...\\git. When GitHub Desktop
+    auto-updates, that version-numbered path changes and the junction goes
+    stale (dangling) -- so C:\\Git\\cmd\\git.exe silently stops working and you
+    get a 0xc0000142 crash. A standalone Git for Windows install under
+    C:\\Program Files\\Git is immune to that, so we prefer it.
+
+    Priority:
+      1. C:\\Program Files\\Git\\cmd\\git.exe        (standalone, preferred)
+      2. C:\\Program Files (x86)\\Git\\cmd\\git.exe  (standalone, 32-bit)
+      3. C:\\Git\\cmd\\git.exe                       (GitHubDesktop junction)
+      4. git found on PATH                          (last resort)
+    """
+    import shutil
+    candidates = [
+        r"C:\Program Files\Git\cmd\git.exe",
+        r"C:\Program Files (x86)\Git\cmd\git.exe",
+        r"C:\Git\cmd\git.exe",
+    ]
+    for c in candidates:
+        if os.path.isfile(c):
+            return c
+    on_path = shutil.which('git')
+    if on_path:
+        return on_path
+    # Nothing usable found: fall back to the junction so the existing failure
+    # path (with a clear error message) still triggers instead of a crash.
+    return r"C:\Git\cmd\git.exe"
+
+GIT_EXE = _resolve_git_exe()
 PROXY = "http://shproxy.asrmicro.com:80"
 REMOTE = "origin"
+
+def git_exe_info():
+    """Return a human-readable description of where GIT_EXE resolves to.
+
+    If GIT_EXE itself is a junction/symlink (e.g. C:\\Git), also report the
+    real on-disk target so the user knows which path to add to their
+    antivirus allowlist. Warn if the target no longer exists (stale junction
+    after a GitHub Desktop auto-update) so the real cause of a 0xc0000142 is
+    obvious instead of mysterious.
+    """
+    path = GIT_EXE
+    info = f"{path}"
+    try:
+        real = os.path.realpath(path)
+        if real.lower() != path.lower():
+            info += f"  (resolves to: {real})"
+            if not os.path.isfile(real):
+                info += "  [WARNING: target missing -> junction is STALE, reinstall Git for Windows or fix C:\\Git]"
+    except Exception:
+        pass
+    return info
 BRANCH = "main"
 
 PROXY_ENV = {}  # current network-mode proxy env, populated by setup_network()
@@ -279,7 +334,8 @@ def git_push(use_proxy=None):
         # error. Surface a clear, actionable message instead of a raw OS dialog.
         if result.returncode < 0:
             err = (f"git.exe 启动失败（返回码 {result.returncode}，疑似 0xc0000142 "
-                   "DLL 初始化失败）。请检查杀毒软件是否拦截 git.exe，或重装 Git for "
+                   f"DLL 初始化失败）。当前 git 路径：{git_exe_info()}。请检查杀毒"
+                   "软件是否拦截 git.exe（将该路径加入白名单），或重装 Git for "
                    "Windows；也可改用 Bash 直接执行推送。")
         else:
             err = result.stderr.strip() or result.stdout.strip() or "Unknown error"
@@ -376,7 +432,8 @@ def cli_mode():
     """Command-line mode"""
     print('=== sEMG Git Push Tool (CLI) ===')
     print()
-    
+    print(f'Git: {git_exe_info()}')
+
     # Show remote URL
     remote_url = get_remote_url()
     if remote_url:
@@ -483,6 +540,7 @@ def gui_mode():
             set_status('[1/5] Checking changes...')
             append('=== Git Push Tool ===', 'BOOT')
             append(f'Project: {PROJECT_DIR}', 'INFO')
+            append(f'Git: {git_exe_info()}', 'INFO')
             
             # Get and display remote URL
             remote_url = get_remote_url()

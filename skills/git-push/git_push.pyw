@@ -73,20 +73,40 @@ def log_msg(msg):
     with open(LOG_FILE, 'a', encoding='utf-8') as f:
         f.write(f'[{ts}] {msg}\n')
 
+def _win_subprocess_kwargs():
+    """Windows: launch git as a headless console process.
+
+    When this script runs under pythonw (no console window) and spawns
+    git.exe (a console-subsystem app), Windows may fail to initialise a
+    console for the child and crash it with 0xc0000142
+    (STATUS_DLL_INITIALIZATION_FAILED) -- exactly the "应用程序无法正常启动"
+    dialog. CREATE_NO_WINDOW tells Windows not to allocate a console window
+    for the child, and the captured std handles (capture_output) do the rest.
+    This avoids the crash.
+    """
+    if sys.platform.startswith('win'):
+        si = subprocess.STARTUPINFO()
+        si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        si.wShowWindow = subprocess.SW_HIDE
+        return {'creationflags': subprocess.CREATE_NO_WINDOW, 'startupinfo': si}
+    return {}
+
+
 def run_git(*args, check=True, capture=True, cwd=None, env=None):
     """Run a git command and return result."""
     cmd = [GIT_EXE] + list(args)
     work_dir = str(cwd or PROJECT_DIR)
     if env is None:
         env = os.environ.copy()
+    win_kwargs = _win_subprocess_kwargs()
     if capture:
         result = subprocess.run(
             cmd, cwd=work_dir, env=env, capture_output=True,
-            text=True, encoding='utf-8', errors='replace'
+            text=True, encoding='utf-8', errors='replace', **win_kwargs
         )
         return result
     else:
-        result = subprocess.run(cmd, cwd=work_dir, env=env)
+        result = subprocess.run(cmd, cwd=work_dir, env=env, **win_kwargs)
         return result
 
 
@@ -254,7 +274,15 @@ def git_push(use_proxy=None):
         env['https_proxy'] = PROXY
     result = run_git("push", REMOTE, BRANCH, check=False, env=env)
     if result.returncode != 0:
-        err = result.stderr.strip() or result.stdout.strip() or "Unknown error"
+        # Negative return code on Windows means the child process crashed at
+        # startup (e.g. 0xc0000142 DLL init failure) rather than a normal git
+        # error. Surface a clear, actionable message instead of a raw OS dialog.
+        if result.returncode < 0:
+            err = (f"git.exe 启动失败（返回码 {result.returncode}，疑似 0xc0000142 "
+                   "DLL 初始化失败）。请检查杀毒软件是否拦截 git.exe，或重装 Git for "
+                   "Windows；也可改用 Bash 直接执行推送。")
+        else:
+            err = result.stderr.strip() or result.stdout.strip() or "Unknown error"
         return False, err
     return True, ""
 

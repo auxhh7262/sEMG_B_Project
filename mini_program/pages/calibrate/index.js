@@ -42,6 +42,8 @@ Page({
   _currentSessionId: null,
   _dataWatcher: null,
   _watchStarting: false,
+  _dataPollTimer: null,
+  _lastDataPollTs: 0,
 
   onLoad() {
     logger.log('[calibrate] onLoad');
@@ -69,48 +71,50 @@ Page({
   },
 
   // ==================== 实时数据 Watch ====================
+  // 实时数据获取：改用轮询替代 .watch()
+  // 原因：data_points 集合历史文档已超 5000，.watch() 监听全集合会报
+  // "Exceed max docs number 5000" 且推送不稳；单设备场景下普通 .get() 查询
+  // 不受 5000 上限限制，2s 轮询间隔对校准实时显示足够。
   _startDataWatch() {
-    if (this._dataWatcher || this._watchStarting) return;
+    if (this._dataPollTimer) return;  // 已在轮询，避免重复启动
     if (!wx.cloud) return;
-    this._watchStarting = true;
 
-    const db = wx.cloud.database({ env: CLOUD_ENV });
-    this._dataWatcher = db.collection('data_points')
-      .orderBy('timestamp', 'desc')
-      .limit(1)
-      .watch({
-        onChange: (snapshot) => {
-          const docs = snapshot.docs;
-          if (docs && docs.length > 0) {
-            const pt = docs[0];
-            const { phase } = this.data;
-            // 只接受校准阶段开始后的新数据，避免旧数据点污染显示
-            const ptTime = pt.timestamp || pt.created_at || 0;
-            if (this._phaseStartTs && ptTime < this._phaseStartTs - 5000) {
-              return;  // 数据点比校准开始早5秒以上，跳过
-            }
-            if (phase === 'relax') {
-              this.setData({
-                liveRelaxRms: pt.rms ? pt.rms.toFixed(3) : null,
-                liveRelaxMdf: pt.mdf ? pt.mdf.toFixed(1) : null,
-              });
-            } else if (phase === 'active_contract') {
-              this.setData({
-                liveActiveRms: pt.rms ? pt.rms.toFixed(3) : null,
-                liveActiveMdf: pt.mdf ? pt.mdf.toFixed(1) : null,
-              });
-            }
+    this._dataPollTimer = setInterval(() => {
+      const db = wx.cloud.database({ env: CLOUD_ENV });
+      db.collection('data_points')
+        .orderBy('timestamp', 'desc')
+        .limit(1)
+        .get()
+        .then(res => {
+          if (!res.data || res.data.length === 0) return;
+          const pt = res.data[0];
+          const { phase } = this.data;
+          // 只接受校准阶段开始后的新数据，避免旧数据点污染显示
+          const ptTime = pt.timestamp || pt.created_at || 0;
+          if (this._phaseStartTs && ptTime < this._phaseStartTs - 5000) return;
+          if (ptTime === this._lastDataPollTs) return;  // 无新数据，跳过
+          this._lastDataPollTs = ptTime;
+          if (phase === 'relax') {
+            this.setData({
+              liveRelaxRms: pt.rms ? pt.rms.toFixed(3) : null,
+              liveRelaxMdf: pt.mdf ? pt.mdf.toFixed(1) : null,
+            });
+          } else if (phase === 'active_contract') {
+            this.setData({
+              liveActiveRms: pt.rms ? pt.rms.toFixed(3) : null,
+              liveActiveMdf: pt.mdf ? pt.mdf.toFixed(1) : null,
+            });
           }
-        },
-        onError: (e) => {
-          logger.warn('[calibrate] data watch error:', e);
-        },
-      });
-
-    this._watchStarting = false;
+        })
+        .catch(e => logger.warn('[calibrate] data poll failed:', e));
+    }, 2000);
   },
 
   _stopDataWatch() {
+    if (this._dataPollTimer) {
+      clearInterval(this._dataPollTimer);
+      this._dataPollTimer = null;
+    }
     if (this._dataWatcher) {
       this._dataWatcher.close();
       this._dataWatcher = null;
@@ -380,7 +384,7 @@ Page({
 
     this.setData({
       phase: 'active_contract',
-      statusText: '请保持和真实使用时一样的握持姿态与力度，用你平时真实的劲握紧，保持15秒！（别凭空使劲，握什么、怎么握都照真实场景）',
+      statusText: '请保持和真实使用时一样的握持姿态与力度，按平时真实的劲握紧，保持15秒！（别凭空使劲，握什么、怎么握都照真实场景）',
       liveActiveRms: null,
       liveActiveMdf: null,
     });

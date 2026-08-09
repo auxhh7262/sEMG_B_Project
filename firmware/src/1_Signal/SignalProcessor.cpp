@@ -642,24 +642,25 @@ void SignalProcessor::updateFatigue(float rms, float mdf) {
         m_activation = 0.0f;
     }
 
-    // Contraction detection: RMS > 2x relax_rms AND RMS > active_rms × 0.3
-    // Dual threshold: relative (2x baseline) + relative-to-max (30% of active_rms)
+    // Contraction detection: RMS > 2.5x relax_rms AND RMS > active_rms × 0.3 (B1-a: 2x→2.5x)
+    // Dual threshold: relative (2.5x baseline) + relative-to-max (30% of active_rms)
     // Removed MDF condition to prevent "fatigue ceiling" effect - at extreme fatigue,
     // MDF may drop close to relaxMDF, causing contraction detection to fail
     float activeThreshold = m_activeRMS_mV * 0.3f;  // 30% of max contraction as floor
-    float absThreshold = max(activeThreshold, 10.0f);  // Minimum 10mV for noise rejection
-    bool rawContract = (rms > m_relaxRMS_mV * 2.0f) && (rms > absThreshold);
+    float absThreshold = max(activeThreshold, 15.0f);  // Minimum 15mV (B1-a: 10→15mV) noise rejection
+    bool rawContract = (rms > m_relaxRMS_mV * 2.5f) && (rms > absThreshold);
 
-    // ===== 收缩状态去抖（Phase 3 收缩门控）=====
+    // ===== 收缩状态去抖（Phase 3 收缩门控 + B1-b 加固）=====
     // 问题：放松瞬间 MDF 残余偏高 + 阈值边界帧偶发 rawContract=true，会被误判为收缩
     //       并用 MDF 公式算出偏高的 f_raw，导致疲劳虚高（静息假疲劳）。
-    // 修复：进入收缩态需连续 2 帧 rawContract 确认；退出需连续 5 帧非收缩确认。
+    //       二头肌静息时偶发微动更易触发，故 B1-b 将进入确认从 2 帧加宽到 4 帧。
+    // 修复：进入收缩态需连续 4 帧 rawContract 确认；退出需连续 5 帧非收缩确认。
     //       去抖后的稳定态 m_contractConfident 才驱动疲劳的 MDF 计算；
     //       非收缩态绝不读 MDF（只走恢复衰减），消除静息假疲劳。
     if (rawContract) {
         m_contractDebounce++;
         m_contractExitCnt = 0;
-        if (m_contractDebounce >= 2) m_contractConfident = true;
+        if (m_contractDebounce >= 4) m_contractConfident = true;  // B1-b: 2→4 帧进入去抖
     } else {
         m_contractDebounce = 0;
         m_contractExitCnt++;
@@ -731,7 +732,7 @@ void SignalProcessor::updateFatigue(float rms, float mdf) {
     // ===== 静息基线在线自校正（Phase 1）=====
     // 确认处于真实静息态（非收缩、接近/低于当前 relax 基线、RMS 稳定）持续若干秒后，
     // 用极慢 EMA 把 relax_rms/relax_mdf 拉向观测静息值，自校正校准误差。
-    // 安全约束：以 calib 参考的 0.6~1.4 倍为硬边界，绝不在收缩期更新，
+    // 安全约束：以 calib 参考的 0.6~1.4 倍为硬边界，绝不在收缩期更新，且只升不降（B1-d），
     // 避免基线漂移导致疲劳/激活失真（保留固定 calib_* 作安全锚）。
     if (!m_isContracting) {
         bool stable = (m_rmsTrendEma > 0.01f) &&
@@ -741,8 +742,10 @@ void SignalProcessor::updateFatigue(float rms, float mdf) {
             const uint32_t REST_ADAPT_FRAMES = 50;  // ~5s @10Hz
             if (m_restFrames >= REST_ADAPT_FRAMES) {
                 const float a = 0.02f;  // 极慢 EMA
-                float newRelaxRms = m_relaxRMS_mV * (1.0f - a) + rms * a;
-                float newRelaxMdf = m_relaxMDF_hz * (1.0f - a) + mdf * a;
+                // B1-d: 只升不降——防止噪静息(尤其二头肌微动/50Hz伪MDF)把 relax 基线拉低，
+                //       否则 2.5x 阈值随之下降、微动更易误触发收缩。向上自愈(校准偏低时)仍保留。
+                float newRelaxRms = max(m_relaxRMS_mV, m_relaxRMS_mV * (1.0f - a) + rms * a);
+                float newRelaxMdf = max(m_relaxMDF_hz, m_relaxMDF_hz * (1.0f - a) + mdf * a);
                 newRelaxRms = constrain(newRelaxRms, m_calibRelaxRMS_mV * 0.6f, m_calibRelaxRMS_mV * 1.4f);
                 newRelaxMdf = constrain(newRelaxMdf, m_calibRelaxMDF_hz * 0.6f, m_calibRelaxMDF_hz * 1.4f);
                 m_relaxRMS_mV = newRelaxRms;

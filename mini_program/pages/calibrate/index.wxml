@@ -40,7 +40,7 @@ module.exports.val = val;
     <view class="help-inline">
       <view class="help-header">
         <text class="help-icon">💡</text>
-        <text class="help-title">肌电传感器校准说明</text>
+        <text class="help-title">校准说明</text>
       </view>
       <view class="help-section">
         <text class="help-section-title">校准目的</text>
@@ -48,16 +48,17 @@ module.exports.val = val;
       </view>
       <view class="help-section">
         <text class="help-section-title">校准操作步骤</text>
+        <text class="help-section-text">整个校准过程保持同一握持手势（即日常训练常用的手型，如握某物体的握法），两阶段只切换"放松/发力"。</text>
         <view class="help-steps">
           <view class="help-step">
             <text class="step-num">1</text>
-            <text class="step-text"><text class="step-bold">静息态采集（10秒）</text>
-              保持和真实使用一致的握持姿态、肌肉完全放松不出力（与用力阶段同一手势）</text>
+            <text class="step-text"><text class="step-bold">静息采集（10秒）</text>
+              保持该手势，肌肉放松、不要发力。</text>
           </view>
           <view class="help-step">
             <text class="step-num">2</text>
-            <text class="step-text"><text class="step-bold">最大收缩采集（15秒）</text>
-              请使用你真实测量时的握持姿态和力度去做用力（例如平时握某物体就握着它、用平时真实的劲），两个阶段手势保持一致，别凭空使劲（校准时手部接触状态越贴近真实使用，激活度越准）</text>
+            <text class="step-text"><text class="step-bold">收缩采集（约15秒）</text>
+              保持该手势，用训练时真实的力度发力并保持。</text>
           </view>
         </view>
       </view>
@@ -66,7 +67,7 @@ module.exports.val = val;
         <view class="help-notice-list">
           <text class="help-notice-item"><text class="notice-label">位置：</text>佩戴在臂带标定的位置，对准目标肌肉</text>
           <text class="help-notice-item"><text class="notice-label">松紧：</text>贴合皮肤，避免松动或滑动</text>
-          <text class="help-notice-item"><text class="notice-label">姿态：</text>采集时保持手臂静止、不要甩动；两个阶段保持同一握持手势、只差"出不出力"——放松阶段请勿张开手掌，用力阶段请用你真实使用时同样的姿态与力度（握什么、怎么握、使多大劲都照真实场景），别凭空使劲，这样校准值才贴近真实使用、激活度才准确</text>
+          <text class="help-notice-item"><text class="notice-label">姿态：</text>采集时保持手臂静止、不要甩动；放松阶段请勿张开手掌，两个阶段只差"出不出力"；用力时别凭空使劲（平时握什么就握什么、用真实的劲，使多大劲都照真实场景），这样校准值才贴近真实使用、收缩力度才准确</text>
         </view>
       </view>
     </view>
@@ -77,7 +78,7 @@ module.exports.val = val;
   <block wx:if="{{phase === 'relax'}}">
     <view class="status-area">
       <view class="hint-box">
-        <text class="hint-phase">静息态采集（约10秒）</text>
+        <text class="hint-phase">静息采集（约10秒）</text>
         <text class="hint-text">请保持握拳姿态放松，不要用力（与用力阶段同一手势）</text>
       </view>
       <view class="live-values">
@@ -99,7 +100,7 @@ module.exports.val = val;
       <view class="phase-transition">
         <text class="transition-icon">✓</text>
         <text class="transition-title">第一阶段完成</text>
-        <text class="transition-sub">静息态采集完毕。请保持刚才的握持姿态先放松，点击按钮后再立即用你真实使用的劲握紧（两个阶段手势保持一致）。</text>
+        <text class="transition-sub">静息采集完毕。请保持刚才的握持姿态先放松，点击按钮后再立即按真实使用的劲握紧（两个阶段手势保持一致）。</text>
       </view>
       <button class="btn btn-primary btn-max-start" bindtap="onStartActive">开始第二阶段</button>
     </view>
@@ -109,8 +110,8 @@ module.exports.val = val;
   <block wx:if="{{phase === 'active_contract'}}">
     <view class="status-area">
       <view class="hint-box">
-        <text class="hint-phase">最大收缩（约15秒）</text>
-        <text class="hint-text red">请用你真实使用的手势和力度握紧并保持（别凭空使劲）</text>
+        <text class="hint-phase">收缩采集（约15秒）</text>
+        <text class="hint-text red">请使用真实使用的手势和力度握紧并保持（别凭空使劲）</text>
       </view>
       <view class="live-values">
         <view class="live-item">
@@ -145,7 +146,7 @@ module.exports.val = val;
           </view>
         </view>
         <view class="result-row">
-          <text class="result-row-label">最大收缩</text>
+          <text class="result-row-label">收缩</text>
           <view class="result-row-values">
             <view class="result-cell">
               <text class="cell-label">RMS(mV)</text>
@@ -170,7 +171,7 @@ module.exports.val = val;
 
       <!-- FAIL原因提示 -->
       <view class="fail-reasons" wx:if="{{validation && !validation.ok}}">
-        <text wx:if="{{!validation.rms_ok}}" class="fail-reason-text">- RMS未达标准(需最大收缩>2倍静息值且>=0.5mV)</text>
+        <text wx:if="{{!validation.rms_ok}}" class="fail-reason-text">- RMS未达标准(需用力>2倍静息值且>=0.5mV)</text>
         <text wx:if="{{!validation.mdf_ok}}" class="fail-reason-text">- MDF超出范围(需20-250Hz)</text>
       </view>
 

@@ -195,6 +195,7 @@ page {
   color: #999;
   line-height: 40rpx;
   word-break: break-all;
+  white-space: pre-line;
 }
 .step-bold { color: #e0e0e0; font-weight: 600; }
 

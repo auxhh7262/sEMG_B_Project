@@ -40,7 +40,7 @@ Page({
     this._initDeviceId();
     this._loadCalibFromCache();
     this._loadRecentHistory();
-    this._startWatch();
+    this._startPolling();
   },
 
   // 本地无 deviceId（如删除重装）时，先从云端发现在线设备并缓存，
@@ -56,7 +56,6 @@ Page({
     setTimeout(() => wx.setNavigationBarTitle({ title: 'sEMG疲劳预警' }), 50);
     this._tabVisible = true;
     this._loadCalibFromCache();
-    if (!this._watcher) this._startWatch();
     this._startPolling();
   },
 
@@ -197,6 +196,14 @@ Page({
   // ==================== 兜底轮询 ====================
   _startPolling() {
     this._stopPolling();
+    // 旧逻辑用 .watch() 监听 data_points，但集合历史文档 >5000 会触发
+    // "Exceed max docs number 5000" 且推送不稳；改为纯轮询 .get() 最新帧，
+    // 普通查询不受 5000 上限限制，单设备场景下足够实时（轮询间隔 2s）。
+    this._ensureCloudReady().then(() => {
+      this.setData({ connected: true });
+    }).catch(() => {
+      this.setData({ connected: false });
+    });
     this._pollTimer = setInterval(() => this._pollOnce(), POLL_INTERVAL);
   },
 
@@ -217,7 +224,6 @@ Page({
       return;
     }
 
-    log('[realtime] Poll started (watch inactive for %d ms)', now - this._lastWatchDataMs);
     try {
       const db = wx.cloud.database({ env: CLOUD_ENV });
       db.collection('data_points')
@@ -230,7 +236,6 @@ Page({
           if (doc.timestamp && doc.timestamp === this._lastPollTs) return; // 无新数据
           this._lastPollTs = doc.timestamp;
           this._onDataPoint(doc);
-          log('[realtime] Poll got new data, ts=%s', doc.timestamp);
         })
         .catch(e => warn('[realtime] Poll query failed:', e));
     } catch (e) {
@@ -257,7 +262,7 @@ Page({
     // 未佩戴/开路：固件已将质量分压到极低(3%)，直接用 quality 阈值判断
     // quality 缺失(旧数据)时默认视为已佩戴，避免误弹横幅
     const worn = pt.quality == null ? true : pt.quality >= 30;
-    // 未校准（固件 m_isCalibrated=false，或云端校准已删除）：激活度/疲劳度无法计算，
+    // 未校准（固件 m_isCalibrated=false，或云端校准已删除）：收缩力度/疲劳度无法计算，
     // 与"未佩戴"同口径统一显示 '--'；rms/mdf 为原始信号仍正常显示。
     // 旧数据缺 calibrated 字段时默认 true，避免历史已校准数据误显 '--'。
     const calibrated = pt.calibrated === false ? false : true;
@@ -266,10 +271,20 @@ Page({
     return {
       time: timeStr,
       rms: (pt.rms || 0).toFixed(3),
-      // 未佩戴/未校准：激活度隐藏，用 '--' 占位（保持口径统一）
+      // 未佩戴/未校准：收缩力度隐藏，用 '--' 占位（保持口径统一）
       act: (!hideCalib) ? (actPct != null ? actPct.toFixed(1) + '%' : '--') : '--',
-      mdf: (pt.mdf || 0).toFixed(1),
-      // 未佩戴/未校准：不显示虚假疲劳度/激活度，用 '--' 占位
+      // MDF 显示门控（仅改显示，不影响校准/疲劳计算）：
+      //   已佩戴且已校准时，若未收缩(收缩力度<2%)则肌电沉默，MDF 塌为 50Hz 工频伪值，
+      //   无可测真值——疲劳度≈0 视为"真静息"显 '--'，疲劳度较高视为"组间恢复中"显 '疲劳恢复中'；
+      //   收缩中(收缩力度>=2%)才显示真实 MDF 数值。
+      //   未佩戴/未校准保持原样显示原始值（该分支由上层 q/act/fat 已统一口径）。
+      mdf: (!hideCalib)
+        ? (actPct != null && actPct >= 2
+            ? (pt.mdf || 0).toFixed(1)
+            : (fatPct != null && fatPct >= 5 ? '疲劳恢复中' : '--'))
+        : (pt.mdf || 0).toFixed(1),
+      // 未佩戴/未校准：不显示虚假疲劳度/收缩力度，用 '--' 占位
+      // 注意：疲劳度始终显示（疲劳是持续状态量，静息期走恢复衰减，组间休息仍应可见）
       fat: (!hideCalib) ? (fatPct != null ? fatPct.toFixed(1) + '%' : '--') : '--',
       // 未佩戴：质量列提示佩戴状态
       q: (!worn) ? '请佩戴' : (pt.quality != null ? pt.quality + '%' : '--'),

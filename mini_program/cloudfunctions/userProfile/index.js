@@ -1,4 +1,16 @@
-// 云函数 userProfile — 保存/读取用户个人信息（解决删除重装后丢失）
+// ============================================================
+// 云函数: userProfile — 用户画像持久化（按 openid 隔离）
+// 架构层: 写入/查询层（users 集合）
+// 触发方: 小程序校准页（保存/恢复用户信息）
+// 用途: 解决小程序删除重装后本地 wx.storage 丢失问题
+// 输入:
+//   action='save': { action, name, age, gender, handedness }
+//   action='get':  { action }
+// 安全: 按 cloud.getWXContext().OPENID 隔离，无 openid 返回 401
+// 辅助: safeQuery() 屏蔽集合不存在错误（开发期 users 集合可能未建）
+// 集合: users
+// 返回: save→{ code:0 }  get→{ code:0, name, age, gender, handedness }
+// ============================================================
 // action: 'save' | 'get'
 // save: { action, name, age, gender, handedness }
 // get:  { action } → { code:0, name, age, gender, handedness }

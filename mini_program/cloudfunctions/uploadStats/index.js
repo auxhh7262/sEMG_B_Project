@@ -1,4 +1,15 @@
-// 云函数 uploadStats — 固件 HTTP POST 上传分钟统计数据
+// ============================================================
+// 云函数: uploadStats — 固件上传分钟聚合统计
+// 架构层: 写入层（stats_minutes 集合）
+// 触发方: 固件 NetManager._uploadMinuteStats() 每分钟触发一次
+// HTTP路径: POST /uploadStats
+// 输入 (JSON):
+//   device_id, timestamp(秒级), rms_avg/max/min, mdf_avg/max,
+//   fatigue_avg/max, quality_avg, count(帧数)
+// 转换: 固件 timestamp 为秒级 → 云函数 ×1000 存 UTC 毫秒
+// 写入集合: stats_minutes
+// 返回: { code:0 }
+// ============================================================
 const cloud = require('wx-server-sdk');
 cloud.init({ env: 'cloud1-d4gqmimmo05b12c94' });
 const db = cloud.database();

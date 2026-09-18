@@ -29,7 +29,7 @@ void BleConfigServer::setDeviceId(const char* id) {
 
 // ==================== init ====================
 void BleConfigServer::init() {
-    LOG("[BLE] Initializing V3.0 BLE server...\n");
+    LOG("[BLE] Initializing V" FIRMWARE_VERSION " BLE server...\n");
     if (!BLE.begin()) {
         LOG("[BLE] Init failed!\n");
         return;
@@ -85,7 +85,7 @@ void BleConfigServer::init() {
     _wifiSsidChar.setEventHandler(BLEWritten, onSsidWritten);
     _wifiPassChar.setEventHandler(BLEWritten, onPassWritten);
 
-    LOG("[BLE] V3.0 Server init done\n");
+    LOG("[BLE] V" FIRMWARE_VERSION " Server init done\n");
 }
 
 // ==================== 配网模式控制 ====================

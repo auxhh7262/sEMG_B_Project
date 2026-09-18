@@ -1,8 +1,19 @@
+// ============================================================
+// 文件名: Logger.cpp
+// 模块: 0_Base 基础模块
+// 职责: 轻量级日志系统 — 自实现 snprintf + 串口输出
+//       避免引入标准库 sprintf（体积约 8KB → 仅 ~1KB）
+// 关键函数:
+//   - _format_to_buf(): 极简格式化引擎，支持 %d %u %x %X %s %c %f
+//   - _log_impl():       LOG 宏底层实现，静态 256B 缓冲防栈溢出
+// ============================================================
 #include "Logger.h"
 #include <stdarg.h>
 #include <string.h>
 #include <math.h>
 
+// ===== 极简版 snprintf — 将 va_list 按 fmt 格式化到 buf =====
+// 支持 %d %u %x %X %s %c %f 及宽度/精度/零填充，避免引入标准库浮点格式化导致固件体积膨胀
 static int _format_to_buf(char* buf, int bufsize, const char* fmt, va_list args) {
     int oi = 0;
     const char* p = fmt;
@@ -105,6 +116,9 @@ static int _format_to_buf(char* buf, int bufsize, const char* fmt, va_list args)
 // 静态全局缓冲，避免深层调用链栈溢出
 static char g_logBuf[256];
 
+// ===== 底层日志实现 — 格式化并通过 SERIAL_COMM 输出 =====
+// LOG 宏的实际落地函数；使用静态全局缓冲（256B）避免深层调用链栈溢出
+// 参数: fmt 为 printf 风格格式串，... 为可变参数
 void _log_impl(const char* fmt, ...) {
     va_list args;
     va_start(args, fmt);

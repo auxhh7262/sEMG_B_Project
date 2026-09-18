@@ -1,11 +1,22 @@
-// pages/realtime/index.js — 实时监测页面
+// pages/realtime/index.js — 实时疲劳监测页面
+// 职责: 展示最新肌电信号（rms/mdf/激活度/疲劳度/质量）+ 最近5条历史
+// 数据获取策略: 2s 轮询 .get() 最新帧（单路径）
+//   - 原设计：.watch() + 轮询双保险；但 data_points 集合超 5000 文档后 .watch 报 "Exceed max docs number"
+//   - 现策略：纯 2s .get() 轮询，通过 _lastPollTs 去重避免重复渲染
+//   - 遗留代码：_startWatch/_watchDataPoints 从未被调用（dead code），但 _stopWatch 仍在 onHide 中调用做安全清理（_watcher 恒 null，close 分支永不进入）
+// 字段门控逻辑 (见 _formatRow):
+//   - 未佩戴(quality<30): 所有衍生字段隐藏，显示"请佩戴"
+//   - 未校准(calibrated=false): 激活度/疲劳度隐藏为 '--'
+//   - MDF 显示门控: 激活度<2%视为肌电沉默，MDF为工频伪值，显示 '--' 或 '疲劳恢复中'
+// 校准恢复: 启动时优先从 wx.storage 读 'calib_data'，缺失则调 cloud.callFunction('getCalibration')
 const app = getApp();
 const { log, warn, error } = require('../../utils/logger');
 
 const MAX_HISTORY = 5;
 const CLOUD_ENV = 'cloud1-d4gqmimmo05b12c94';
-const POLL_INTERVAL = 2000;    // 轮询间隔 2s（watch 真机不触发时的兜底）
-const WATCH_TIMEOUT = 15000;   // watch 超过 15s 无数据则启动轮询
+const POLL_INTERVAL = 2000;    // 轮询间隔 2s（唯一数据路径，watch 已废弃）
+// 以下为 .watch() 遗留常量，已无实际作用，保留仅为未来可能重新引入
+const WATCH_TIMEOUT = 15000;   // watch 超过 15s 无数据则启动轮询（当前死常量）
 
 Page({
   data: {
@@ -20,19 +31,19 @@ Page({
 
   _historyRows: [],
   _relaxRms: null, _activeRms: null,
-  _watcher: null,
+  _watcher: null,               // DEAD CODE: .watch() 遗留状态，恒为 null
   _starting: false,
   _sessionId: null,
   _tabVisible: false,
   _calibRestoring: false,
   _lastRenderTime: 0,
-  _watchRetryDelay: 0,
+  _watchRetryDelay: 0,          // DEAD CODE: .watch() 重连指数退避参数，恒为 0
 
   // ==== 兜底轮询相关 ====
   _pollTimer: null,
-  _watchActive: false,      // watch 当前是否活跃
-  _lastWatchDataMs: 0,      // 上次 watch 推送数据的时间
-  _lastPollTs: 0,           // 上次轮询拿到的最新 timestamp，防重复
+  _watchActive: false,          // DEAD CODE: .watch() 活跃标志，永不置 true
+  _lastWatchDataMs: 0,          // DEAD CODE: .watch() 上次推送时间，永为 0
+  _lastPollTs: 0,               // 上次轮询拿到的最新 timestamp，防重复
 
   onLoad() {
     log('[realtime] Cloud onLoad');
@@ -219,7 +230,7 @@ Page({
     if (!this._tabVisible) return;
 
     const now = Date.now();
-    // watch 活跃且在超时内，跳过轮询
+    // DEAD BRANCH: _watchActive 永不置 true，此条件恒 false（保留供未来恢复 .watch() 时参考）
     if (this._watchActive && (now - this._lastWatchDataMs < WATCH_TIMEOUT)) {
       return;
     }
@@ -283,8 +294,9 @@ Page({
             ? (pt.mdf || 0).toFixed(1)
             : (fatPct != null && fatPct >= 5 ? '疲劳恢复中' : '--'))
         : (pt.mdf || 0).toFixed(1),
-      // 未佩戴/未校准：不显示虚假疲劳度/收缩力度，用 '--' 占位
-      // 注意：疲劳度始终显示（疲劳是持续状态量，静息期走恢复衰减，组间休息仍应可见）
+      // 疲劳度显示规则：
+      //   - 已校准(hideCalib=false): 正常显示数值，null 时占位 '--'
+      //   - 未校准(hideCalib=true): 强制 '--'，避免未校准基线下输出虚假疲劳度
       fat: (!hideCalib) ? (fatPct != null ? fatPct.toFixed(1) + '%' : '--') : '--',
       // 未佩戴：质量列提示佩戴状态
       q: (!worn) ? '请佩戴' : (pt.quality != null ? pt.quality + '%' : '--'),

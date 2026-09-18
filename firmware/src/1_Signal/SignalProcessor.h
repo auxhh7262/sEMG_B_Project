@@ -1,6 +1,17 @@
-// 文件: SignalProcessor.h
-// 描述: 肌电信号处理器头文件
-
+// ============================================================
+// 文件名: SignalProcessor.h
+// 模块:   信号处理
+// 职责:   肌电信号采集与分析核心——环形缓冲采样、50/60Hz 工频陷波、RMS/MDF 计算、FFT 功率谱、疲劳度评估、收缩检测、开路检测、校准与恢复率在线学习
+// 关键类/函数:
+//   - NotchFilter: 二阶 IIR 陷波器类，支持 configure(sampleRate, centerFreq, q) 与无三角函数的 process()，可在 ISR 中安全调用
+//   - SignalProcessor: 肌电信号处理器主类
+//     - pushSample(): 推入 ADC 采样（陷波 + 工频能量统计 + 环形缓冲写入）
+//     - update(): 主循环信号处理入口（RMS / MDF / 疲劳度 / 激活度 / 收缩检测 / 开路检测一帧计算）
+//     - calculateMDF(): 基于 FFT 的中位频率计算
+//     - setCalibration() / clearCalibration(): 设置或清除校准基准
+//     - getFatigue() / getActivation(): 获取疲劳度 / 激活度（0~100%）
+//     - isContracting() / isSignalInvalid(): 收缩状态与电极开路判定
+// ============================================================
 #ifndef SIGNAL_PROCESSOR_H
 #define SIGNAL_PROCESSOR_H
 
@@ -155,7 +166,7 @@ private:
     bool m_contractConfident;   // 收缩状态去抖后的稳定态（Phase3 收缩门控）
     uint32_t m_contractDebounce; // 进入收缩态所需的连续确认帧计数
     uint32_t m_contractExitCnt;  // 退出收缩态所需的连续非收缩帧计数
-    bool m_signalInvalid;       // 电极开路/未佩戴标志（50Hz工频能量超限）
+    bool m_signalInvalid;       // 电极开路/未佩戴标志（50Hz+60Hz 合并工频能量超限）
     uint8_t m_invalidFrames;    // 连续异常帧计数（进入开路去抖，防误判）
     uint8_t m_validFrames;      // 连续正常帧计数（退出开路去抖/滞回）
 

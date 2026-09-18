@@ -1,3 +1,14 @@
+// ============================================================
+// 云函数: ackDeviceCommand — 固件确认命令执行完成
+// 架构层: 写入层（device_commands 状态终转移）
+// 触发方: 固件 NetManager._ackCommand() HTTP POST
+// HTTP路径: POST /ackDeviceCommand
+// 输入 (JSON): command_id, status('done'|'failed')
+// 逻辑: doc(command_id).update → status + executed_at=now
+// 命令状态机: pending → executing(getDeviceCommand) → done/failed(本函数)
+// 集合: device_commands
+// 返回: { code:0 }
+// ============================================================
 // 云函数 ackDeviceCommand — 固件确认命令执行完成
 const cloud = require('wx-server-sdk');
 cloud.init({ env: 'cloud1-d4gqmimmo05b12c94' });

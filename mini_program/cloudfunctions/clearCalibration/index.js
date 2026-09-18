@@ -1,5 +1,16 @@
-// 云函数 clearCalibration — 清除云端 sessions 集合中该设备的校准数据
-// 小程序"清除校准"时调用：与固件 EEPROM、本地缓存共同构成"三处一致清除"
+// ============================================================
+// 云函数: clearCalibration — 清除指定设备云端校准数据
+// 架构层: 清理层（sessions 集合 calibration 字段 remove）
+// 触发方: 小程序校准页 onResetCalib() → 固件 reset_calib 命令之后调用
+//         三处一致清除: 固件 EEPROM + 本地 wx.storage + 云端 sessions
+// 输入: device_id
+// 逻辑: sessions.where({device_id, status in [completed/calibrating/cancelled]})
+//         → update({ calibration: _.remove() })
+//   不移除 session 文档，仅清 calibration 字段 → getCalibration 判定"无校准"
+//   data_points 实时数据不受影响
+// 返回: { code:0, updated:N }
+// 集合: sessions
+// ============================================================
 //
 // 清除后 getCalibration 仅返回 status='completed' 且 calibration.relax_rms 非空的记录，
 // 由于本函数移除了 calibration 字段，getCalibration 将返回 404（无校准），

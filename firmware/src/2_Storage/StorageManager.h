@@ -1,9 +1,23 @@
+// ============================================================
+// 文件名: StorageManager.h
+// 模块:   存储管理
+// 职责:   EEPROM 持久化接口——WiFi 凭证、用户个人校准数据、个人信息的读写与清除，基于 RA4M1 Data Flash 8KB 地址布局
+// 关键类/函数:
+//   - PersonalCalibData_t: 个人校准数据结构体（relax/active RMS、MDF、endMDF、时间戳）
+//   - UserProfileData_t: 用户个人信息结构体（姓名、年龄、性别、利手）
+//   - StorageManager: EEPROM 管理类
+//     - Init(): 初始化 EEPROM 库
+//     - LoadWifiCredentials() / SaveWifiCredentials(): WiFi 凭证读写
+//     - GetPersonalCalib() / UpdatePersonalCalib() / ClearPersonalCalib(): 校准数据 CRUD
+//     - GetUserProfile() / SetUserProfile(): 个人信息读写
+// ============================================================
 #ifndef STORAGE_MANAGER_H
 #define STORAGE_MANAGER_H
 
 #include <Arduino.h>
 #include <EEPROM.h>
-#include "0_Base/Globals.h"==================== EEPROM 地址布局 ====================
+#include "0_Base/Globals.h"
+// ==================== EEPROM 地址布局 ====================
 // RA4M1 Data Flash 8KB，通过 EEPROM 库访问
 #define EEPROM_WIFI_SSID_ADDR   0x00   // 32 bytes
 #define EEPROM_WIFI_PASS_ADDR   0x20   // 64 bytes (offset 32)

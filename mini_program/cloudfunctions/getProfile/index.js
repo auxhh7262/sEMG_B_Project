@@ -1,4 +1,16 @@
-// 云函数 getProfile — 返回该设备最近一次校准的个人基线（纵向学习 / 阶段3）
+// ============================================================
+// 云函数: getProfile — 阶段3 云端精炼画像拉取
+// 架构层: 查询层（sessions 集合最近 completed 基线）
+// 触发方: 固件 NetManager.fetchProfile() HTTP POST（会话启动后一次）
+// HTTP路径: POST /getProfile
+// 输入: device_id（可选，不传则自动发现最近设备）
+// 当前策略: 直接取最近一次 completed session 校准值（2026-07-11 修订）
+//   原因: 多 session 聚合会把握持姿态/接触压力伪迹混入，污染基线
+//   本地 uploadCalibration 上传 → 云端最近 = 本地 EEPROM 校准
+// 返回: { code:0, relax_rms/MDF, active_rms/MDF, end_mdf, sessions_used:1 }
+// 集合: sessions
+// 修订历史（保留原文，详见下方）：
+// ============================================================
 //
 // 重要修订（2026-07-11）：
 // 原先对最近 20 次 completed session 做中位数聚合 + "采纳更高 active_rms 峰值"。

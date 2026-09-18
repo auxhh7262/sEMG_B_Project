@@ -1,11 +1,26 @@
-// pages/calibrate/index.js — 校准页面
+// pages/calibrate/index.js — 肌电校准流程页面
+// 职责: 云端驱动的双阶段校准（静息→用力→保存）
+// 核心流程:
+//   1. onLoad: 初始化设备ID（BLE缓存/云端发现）+ 加载用户画像 + 加载校准数据
+//   2. 校准三阶段:
+//      - relax(10s): 发送 record_relax 命令 → 轮询 sessions.calibration.relax_rms 完成
+//      - active(15s): 发送 record_active 命令 → 轮询 sessions.calibration.active_rms 完成
+//      - save:        发送 save_calib 命令 + 用户画像 → 本地缓存 + 云端持久化
+//   3. 实时显示: 2s 轮询 data_points 最新帧（.watch 因集合 >5000 限制不可靠）
+//   4. 数据轮询: 1s 轮询 sessions 集合等待校准阶段结果回填
+// 关键云函数/集合:
+//   - 命令写入: device_commands 集合 add({device_id, command, params})
+//   - 阶段结果: sessions 集合 watch/poll → calibration.relax_rms / active_rms
+//   - 实时信号: data_points 集合 get 最新帧
+//   - 画像持久化: cloud.callFunction('userProfile') → save/get
+//   - 校准持久化: cloud.callFunction('getCalibration') / clearCalibration
 const logger = require('../../utils/logger.js');
 const storage = require('../../utils/storage.js');
 const CLOUD_ENV = 'cloud1-d4gqmimmo05b12c94';
 
 Page({
   data: {
-    phase: 'idle',           // idle | relax | active_ready | active | result
+    phase: 'idle',           // idle | relax | active_ready | active_contract | result
     connected: false,
     currentUser: null,
     userMetaStr: '',
@@ -40,9 +55,9 @@ Page({
   _phaseTimeout: null,
   _phaseStartTs: 0,
   _currentSessionId: null,
-  _dataWatcher: null,
-  _watchStarting: false,
-  _dataPollTimer: null,
+  _dataWatcher: null,          // DEAD CODE: .watch() 遗留状态，恒为 null（命名残留但函数实为轮询器）
+  _watchStarting: false,       // DEAD CODE: .watch() 启动标志，恒为 false
+  _dataPollTimer: null,        // 实际轮询器：2s setInterval
   _lastDataPollTs: 0,
 
   onLoad() {
@@ -75,6 +90,7 @@ Page({
   // 原因：data_points 集合历史文档已超 5000，.watch() 监听全集合会报
   // "Exceed max docs number 5000" 且推送不稳；单设备场景下普通 .get() 查询
   // 不受 5000 上限限制，2s 轮询间隔对校准实时显示足够。
+  // 命名残留 ".watch()"，实际仅启动 2s setInterval 轮询 data_points
   _startDataWatch() {
     if (this._dataPollTimer) return;  // 已在轮询，避免重复启动
     if (!wx.cloud) return;
@@ -110,11 +126,13 @@ Page({
     }, 2000);
   },
 
+  // 命名残留 ".watch()"，实际仅停止轮询；_dataWatcher close 分支是死代码（_dataWatcher 恒为 null）
   _stopDataWatch() {
     if (this._dataPollTimer) {
       clearInterval(this._dataPollTimer);
       this._dataPollTimer = null;
     }
+    // DEAD BRANCH: _dataWatcher 恒为 null，此分支永不进入
     if (this._dataWatcher) {
       this._dataWatcher.close();
       this._dataWatcher = null;

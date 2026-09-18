@@ -1,4 +1,17 @@
-// AppController.cpp — 业务调度主循环
+// ============================================================
+// 文件名: AppController.cpp
+// 模块: 4_AppController 应用控制器
+// 职责: 业务调度主循环 — 信号处理 → 校准流程 → 云端上传 → 状态处理
+//       持有 StateManager / SignalProcessor / StorageManager / NetManager 四个模块指针
+// 关键流程:
+//   - init():       开机从 EEPROM 加载校准数据 + 用户画像，注入 SignalProcessor
+//   - tick():       每帧主循环 — 取信号值 → 校准阶段累积/终判 → 数据上云 → LED状态
+//   - handleRecordRelax():  静息校准阶段开始（10s，去极值求均值）
+//   - handleRecordActive(): 用力校准阶段开始（15s，取峰值RMS + 频谱MDF）
+//   - handleSaveCalib():    保存校准到 EEPROM + 云端
+//   - handleResetCalib():   清除校准
+//   - handleApplyProfile(): 阶段3 云端精炼画像覆盖本地基线
+// ============================================================
 #include "AppController.h"
 #include "0_Base/Logger.h"
 #include "0_Base/Board.h"
@@ -15,6 +28,9 @@ AppController::AppController(
 {
 }
 
+// init — 开机初始化
+//   从 EEPROM 加载 PersonalCalibData + UserProfileData，注入 SignalProcessor 基线
+//   之后状态机转入 ST_RUNNING
 void AppController::init(void)
 {
     PersonalCalibData_t calib = {0};
@@ -54,6 +70,11 @@ void AppController::init(void)
     LOG("[CTRL] AppController initialized.\n");
 }
 
+// tick — 每帧主循环（由 loop() 调用，约 10ms/帧）
+//   1) 取 SignalProcessor 输出（rms/mdf/fatigue/activation/quality）
+//   2) 校准阶段: RELAX 去极值求均值 / ACTIVE 取峰值 + 频谱终判
+//   3) RUNNING 态: pushDataPoint 上云 + 限频日志
+//   4) 状态分派: RUNNING→LED颜色更新 / ERROR→LED全灭
 void AppController::tick(void)
 {
     // ===== Signal processing =====
@@ -193,7 +214,12 @@ void AppController::_handleErrorState(void) {
 }
 
 // ==================== Calibration Handlers ====================
+// 三个校准阶段由云端 record_relax / record_active / save_calib 命令触发
+// 流程: RELAX(10s静息) → ACTIVE(15s用力) → SAVE(写入EEPROM+上传云端)
 
+// handleRecordRelax — 启动静息校准阶段
+//   目标: 10秒内去除最大最小值后求均值，作为 relax 基线
+//   完成后自动调用 uploadCalibPhase("relax") 上云
 void AppController::handleRecordRelax()
 {
     if (_calibPhase != CALIB_NONE) {
@@ -214,6 +240,9 @@ void AppController::handleRecordRelax()
     _signalProc->resetEMA();
 }
 
+// handleRecordActive — 启动用力校准阶段
+//   目标: 15秒内记录峰值RMS + 频谱峰值MDF + 结束MDF
+//   完成后 finalizeCalibMdf() 触发频谱终判，uploadCalibPhase("active", ..., endMdf) 上云
 void AppController::handleRecordActive()
 {
     if (_calibPhase != CALIB_NONE) {
@@ -229,6 +258,9 @@ void AppController::handleRecordActive()
     LOG("[CTRL] >>> CALIB ACTIVE start (15s) <<<\n");
 }
 
+// handleSaveCalib — 保存校准到 EEPROM + 云端
+//   参数: userScore=校准评分(-1表示仅存个人信息), name/age/gender/handedness=用户画像
+//   流程: 存画像 → NaN校验 → 写入 PersonalCalibData → 注入 SignalProcessor → 上云
 void AppController::handleSaveCalib(int userScore,
                                      const char* name, int age, int gender, int handedness)
 {
@@ -280,6 +312,8 @@ void AppController::handleSaveCalib(int userScore,
         relax_rms, active_rms);
 }
 
+// handleResetCalib — 清除校准（云端 reset_calib 命令触发）
+//   清除 SignalProcessor 基线 → StorageManager.ClearPersonalCalib() → 回到 RUNNING
 void AppController::handleResetCalib()
 {
     _signalProc->clearCalibration();
@@ -290,8 +324,9 @@ void AppController::handleResetCalib()
     LOG("[CTRL] Calibration reset (EEPROM cleared)\n");
 }
 
-// 阶段3：云端纵向画像精炼基线应用
-// 把云函数聚合多 session 得到的更稳健个人基线覆盖写入 EEPROM，并即时生效。
+// handleApplyProfile — 阶段3 云端纵向画像精炼基线应用
+//   NetManager.fetchProfile() 拉到云端聚合基线后通过此回调覆盖本地 EEPROM + 即时生效
+//   云端多 session 聚合得到更稳健的 relax/active 基线
 void AppController::handleApplyProfile(float relaxRms, float activeRms,
                                        float relaxMdf, float activeMdf, float endMdf)
 {

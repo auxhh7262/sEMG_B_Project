@@ -19,10 +19,14 @@
 #define MAX_FFT_SIZE 256
 #endif
 
-// 开路检测阈值：被陷波移除的 50Hz 工频 RMS 超过此值(mV)即判为开路/未佩戴
-// 实测：开路 50Hz RMS≈500-1500mV，佩戴静息≈5-8mV，重新佩戴过渡瞬间瞬态≈20-40mV。
-// 阈值取 80mV：既消除重新佩戴时 2 行短暂"请佩戴"闪动，又离开路 500mV 余量极大，
-// 不影响开路检测（原 40mV 会把过渡瞬态误判为开路）。
+// 开路检测阈值：被陷波移除的工频总能量（50Hz+60Hz 合并 RMS，mV）超过此值即判为开路/未佩戴
+// 实测：
+//   开路——电极悬空，工频共模干扰极强，RMS≈800-1340mV
+//   佩戴——CMRR 抑制后仍有残留工频，RMS≈130-600mV
+//   两者存在干净间隙（~600-800mV），故采用双阈值滞回：
+//     进入开路 MAINS_OPEN_ENTER_MV=700mV（佩戴上界 +100mV 裕度）
+//     退出开路 MAINS_OPEN_EXIT_MV=400mV（开路下界 -400mV 裕度）
+//   中间带(400-700mV)维持原状态，防临界抖动
 #ifndef MAINS_OPEN_ENTER_MV
 #define MAINS_OPEN_ENTER_MV 700.0f   // 进入开路：高于佩戴实测工频上界(~600mV)留裕度
 #endif
@@ -58,7 +62,7 @@ SignalProcessor::SignalProcessor() :
     m_currentMDF(0.0f), m_lastValidMDF(0.0f), m_isMdfValid(false),
     m_signalQuality(0.0f),
     m_fftWindowSize(DEFAULT_FFT_SIZE),
-    m_mdfMinFreq(20.0f), m_mdfMaxFreq(250.0f),  // 20Hz下限对齐传感器有效频谱（20~500Hz）
+    m_mdfMinFreq(20.0f), m_mdfMaxFreq(250.0f),  // 有效频谱窗：20Hz 下限（传感器低通）、250Hz 上限（超出截断丢弃）
     m_lastTotalPower(0.0f), m_rawMDF(0.0f),
     m_debugEnabled(false), m_debugLevel(DEBUG_NONE),
     m_fftTwiddleInitialized(false),
@@ -528,7 +532,7 @@ float SignalProcessor::calculateMDF() {
             (double)m_rawMDF, (double)alpha, (double)m_currentMDF);
 #endif
     } else {
-        // rawMDF超出[8,250]Hz范围，视为异常
+        // rawMDF 超出合理区间（<15 或 >250 Hz）视为异常
         m_consecutivePhysioFrames = 0;
         if (m_lastValidMDF > 0.0f) {
             m_currentMDF = m_lastValidMDF;
@@ -757,8 +761,9 @@ void SignalProcessor::updateFatigue(float rms, float mdf) {
         }
     }
     // ========== Fatigue Formula ==========
-    // 疲劳指数: FI = (activeMDF - currentMDF) / (activeMDF - relaxMDF) × 100%
-    // 利用校准阶段已知的 activeMDF(峰值) 和 relaxMDF(静息) 作为锚点，
+    // 疲劳指数: FI = (activeMDF - currentMDF) / (activeMDF - endMDF) × 100%
+    // 利用校准阶段已知的 activeMDF(峰值) 和 endMDF(用力结束) 作为锚点；
+    // endMDF 无效时回退 relaxMDF（见 _recomputeMdfRange）。
     // 避免监测阶段动态基线捕获时机过早导致的负值问题。
     //
     // 参考文献:

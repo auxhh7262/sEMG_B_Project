@@ -1,3 +1,13 @@
+// ============================================================
+// 文件名: Board.h
+// 模块:   基础驱动/硬件板卡
+// 职责:   板卡级引脚分配、ADC 硬件常量、校准流程时序参数以及 UNO R4 WiFi ADC 死锁修复宏
+// 关键类/函数:
+//   - PIN_EMG_ADC / PIN_RGB_RGB_G / PIN_RGB_B: 硬件引脚定义
+//   - ADC_REF_MV / ADC_MAX_VALUE: RA4M1 14-bit ADC 参数（5V 参考）
+//   - CALIB_RELAX_SEC / CALIB_ACTIVE_SEC / LOOP_INTERVAL_MS: 校准与主循环时序
+//   - FAST_ADC_READ(pin): 针对 Uno R4 WiFi 高频采样死锁的硬件级修复宏
+// ============================================================
 #ifndef BOARD_H
 #define BOARD_H
 #include <Arduino.h>
@@ -16,7 +26,7 @@
 
 // =============== 串口定义 ===============
 #define SERIAL_COMM Serial  // USB 调试串口
-#define SERIAL_ESP32 Serial1 // 与 ESP32 通信的硬件 UART
+#define SERIAL_ESP32 Serial1 // 对接 UNO R4 WiFi 板载 ESP32-S3-MINI-1-N8 的硬件 UART
 #define ESP_BAUDRATE 115200
 
 // =============== ADC 参数（RA4M1 14-bit） ===============

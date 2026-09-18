@@ -1,3 +1,13 @@
+// ============================================================
+// 云函数: getCalibration — 查询最近一次完成的校准数据
+// 架构层: 查询层（sessions 集合校准读取）
+// 触发方: 小程序 calibrate/realtime 页面（启动时恢复云端校准）
+// 兼容调用: wx.cloud.callFunction({name:'getCalibration'})
+// 输入: device_id（可选，不传则从 data_points 发现最近设备）
+// 查询逻辑: sessions.where({device_id, status:'completed'}) → orderBy(updated_at, desc) → limit(1)
+// 返回: { code:0, device_id, calibration:{ relax_rms, relax_mdf, active_rms, active_mdf, end_mdf } }
+// 集合: sessions, data_points（发现设备时）
+// ============================================================
 // 云函数 getCalibration — 从 sessions 集合读取最近校准数据
 // 解决客户端直接读取 sessions 集合的权限问题
 const cloud = require('wx-server-sdk');

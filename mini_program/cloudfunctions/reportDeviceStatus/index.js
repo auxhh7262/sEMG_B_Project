@@ -1,4 +1,13 @@
-// 云函数 reportDeviceStatus — 固件上报设备状态（IP/SSID/在线状态）
+// ============================================================
+// 云函数: reportDeviceStatus — 固件定时上报设备状态
+// 架构层: 写入层（device_status 集合 upsert）
+// 触发方: 固件 NetManager._reportStatus() 每 60s 调用一次
+// HTTP路径: POST /reportDeviceStatus
+// 输入 (JSON): device_id, ip, ssid, status('online'), extra
+// 逻辑: device_id 存在 → update; 不存在 → add
+// 集合: device_status
+// 返回: { code:0 }
+// ============================================================
 const cloud = require('wx-server-sdk');
 cloud.init({ env: 'cloud1-d4gqmimmo05b12c94' });
 const db = cloud.database();

@@ -1,5 +1,13 @@
-// HTTP 云函数 getDeviceStatus
-// 访问路径: POST https://cloud1-d4gqmimmo05b12c94.service.tcloudbase.com/getDeviceStatus
+// ============================================================
+// 云函数: getDeviceStatus — 查询设备在线状态
+// 架构层: 查询层（device_status 集合读取）
+// 触发方: 小程序 network 页面（10s 自动刷新）、小程序实时查询设备在线状态
+// 兼容两种调用: HTTP 网关 (event.body) + wx.cloud.callFunction() (event.device_id)
+// 在线判定: 最后上报 timestamp 距今 < 60s
+// 输入: device_id
+// 返回: { code:0, data:{ online, ip, ssid, timestamp, firmware_version } }
+// 集合: device_status
+// ============================================================
 const cloud = require('wx-server-sdk');
 cloud.init({ env: 'cloud1-d4gqmimmo05b12c94' });
 const db = cloud.database();

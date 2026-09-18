@@ -1,3 +1,13 @@
+// ============================================================
+// 云函数: deviceRegister — 固件设备注册/更新到 devices 集合
+// 架构层: 写入层（devices 集合 upsert）
+// 触发方: 固件开机/首次上线
+// HTTP路径: POST /deviceRegister
+// 输入 (JSON): device_id, firmware_ver='v2.0.0'
+// 逻辑: device_id 存在 → update(last_seen, firmware_ver); 不存在 → add
+// 集合: devices
+// 返回: { code:0, msg:'registered'|'updated' }
+// ============================================================
 const cloud = require('wx-server-sdk');
 cloud.init({ env: 'cloud1-d4gqmimmo05b12c94' });
 const db = cloud.database();

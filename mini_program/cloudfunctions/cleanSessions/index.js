@@ -1,7 +1,15 @@
-// 云函数 cleanSessions — 清理历史脏校准 session（校准法修正后，旧姿态/异常值的 completed session 已无参考价值）
+// ============================================================
+// 云函数: cleanSessions — 清理历史脏校准 sessions（运维工具）
+// 架构层: 清理层（sessions 集合批量删除）
+// 用途: 校准法/硬件修正后，旧姿态/异常值的 completed session 已无参考价值
+//       批量删除 sessions 集合中 status='completed' 的文档
+// 安全机制: 必须显式传 { confirm:true } 才执行（否则只返回待删数量，dry-run）
+// 输入: confirm:true + 可选 device_id（仅清理指定设备）
+// 循环删除: limit(100) 分批 → guard<50 防死循环
+// 注意: 破坏性操作！仅清理校准历史，data_points 实时数据不受影响
+// 集合: sessions
+// ============================================================
 // 用法：微信开发者工具右键本函数「上传并部署：云端安装依赖」，然后「测试调用」并传入 {confirm:true}
-//       可选 device_id 仅清理指定设备；不传则清理全部设备。
-// 注意：这是破坏性操作（删除 sessions 集合中 status='completed' 的记录），仅清理校准历史，不影响其它集合。
 const cloud = require('wx-server-sdk');
 cloud.init({ env: 'cloud1-d4gqmimmo05b12c94' });
 const db = cloud.database();

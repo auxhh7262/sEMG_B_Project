@@ -1,3 +1,15 @@
+// ============================================================
+// 文件名: AppController.h
+// 模块:   应用调度
+// 职责:   主业务调度中枢——依赖注入 StateManager / SignalProcessor / StorageManager / NetManager，在主循环 tick 中驱动信号处理、校准流程两阶段管理、云端上传触发与状态机协调
+// 关键类/函数:
+//   - AppController: 应用控制器类
+//     - init(): 初始化各依赖子系统
+//     - tick(): 主循环每帧调用——信号处理 → 状态分发 → 数据入批上传
+//     - handleRecordRelax() / handleRecordActive() / handleSaveCalib() / handleResetCalib(): 校准四阶段命令处理
+//     - handleApplyProfile(): 应用云端纵向画像精炼基线（阶段3）
+//     - onCommandReceived(): 统一云端下行指令入口
+// ============================================================
 #ifndef APP_CONTROLLER_H
 #define APP_CONTROLLER_H
 

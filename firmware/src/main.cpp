@@ -299,7 +299,7 @@ void setup() {
     }
 
     delay(500);
-    LOG("[MAIN] V3.0 Cloud init complete, Device: %s\n", gNetManager.getDeviceId());
+    LOG("[MAIN] V" FIRMWARE_VERSION " Cloud init complete, Device: %s\n", gNetManager.getDeviceId());
 }
 
 // ============================================================

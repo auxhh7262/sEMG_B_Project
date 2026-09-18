@@ -1,4 +1,19 @@
-// pages/network/index.js — 设备配网页面
+// pages/network/index.js — BLE WiFi 配网页面
+// 职责: 通过微信 BLE API 发现 sEMG 设备 → 写入 SSID/PASS → 等待固件联网 → 云端确认上线
+// 配网流程（三步）:
+//   1. 扫描: startBluetoothDevicesDiscovery → 过滤 name.startsWith('sEMG')
+//   2. 连接: createBLEConnection → getBLEDeviceServices → getBLEDeviceCharacteristics
+//   3. 配网: 写 CHAR_SSID → 延时 100ms → 写 CHAR_PASS → 等待固件 notify(OK/CONNECTING/FAIL)
+// BLE 注意事项（踩坑记录）:
+//   - 不过滤 services 扫描（避免部分手机 UUID 格式差异导致滤掉设备）
+//   - 无条件注册 onBLECharacteristicValueChange（重连后 properties 常不准，notify 判断会漏）
+//   - 配网完成延迟 3s 再查云端状态（固件 HTTP reportStatus 需要往返时间）
+// 云端确认: cloud.callFunction('getDeviceStatus') → 最多 6 次重试，每次 3s 间隔
+//           上线后启动 10s 自动刷新
+// BLE UUID (firmware BleConfigServer.h):
+//   SERVICE:  19B10000-E8F2-537E-4F6C-D104768A1214
+//   SSID:     19B10001 (写)    PASS: 19B10004 (写)
+//   DEVICE_ID:19B10005 (读)    RESULT:19B10006 (notify)
 
 const { log, warn, error } = require('../../utils/logger');
 

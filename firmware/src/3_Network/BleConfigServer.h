@@ -1,4 +1,15 @@
-// BleConfigServer.h — BLE 配网模块声明
+// ============================================================
+// 文件名: BleConfigServer.h
+// 模块:   网络通信/BLE 配网
+// 职责:   BLE 外设服务实现——手机 APP（微信小程序）通过 BLE Characteristic 写入 WiFi SSID/密码完成设备配网，支持结果通知与统一重置入口
+// 关键类/函数:
+//   - BleConfigServer: BLE 配网服务类（单例 getInstance）
+//     - startProvisioning() / stopProvisioning(): 启动 / 停止 BLE 广播
+//     - hasNewCredentials() / consumeCredentials(): 检查并消费手机端写入的 WiFi 凭证
+//     - notifyProvisionResult(result): 向手机端推送配网结果（"CONNECTING"/"OK"/"FAIL"）
+//     - resetNetwork(): 统一重置——清 EEPROM + 断 WiFi + 重启 BLE 广播
+//     - onSsidWritten() / onPassWritten(): 静态 BLE 写入回调
+// ============================================================
 #ifndef BLECONFIGSERVER_H
 #define BLECONFIGSERVER_H
 

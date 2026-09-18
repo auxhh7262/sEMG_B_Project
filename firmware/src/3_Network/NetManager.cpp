@@ -1,4 +1,17 @@
-// NetManager.cpp — HTTP 云端上传模块
+// ============================================================
+// 文件名: NetManager.cpp
+// 模块: 3_Network 网络通信
+// 职责: WiFi连接管理、NTP时间同步、HTTP云端数据上传/命令接收
+//       维护批量发送缓冲区 + 分钟统计聚合 + 离线重试队列
+// 关键函数:
+//   - initBlocking(): 开机阻塞式WiFi连接 + NTP同步
+//   - tick():          非阻塞轮询主循环（WiFi重连、NTP、数据上传、命令查询）
+//   - pushDataPoint(): 业务层调用入口 — 压入批量缓冲/分钟统计
+//   - _checkIngest():  批次满或3秒到 → 组装JSON → HTTP POST上传
+//   - _httpPost/_httpGet(): 原始TCP实现的HTTP请求（重试2次，8s超时）
+//   - _checkCommand():  每3秒轮询云端指令（校准控制、WiFi重置等）
+//   - fetchProfile():   阶段3 拉取云端精炼画像覆盖本地基线
+// ============================================================
 #include "NetManager.h"
 #include "0_Base/Logger.h"
 #include "0_Base/Config.h"
@@ -54,6 +67,9 @@ void NetManager::_genDeviceId(char* buf, size_t len) {
              mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 }
 
+// initBlocking — 开机初始化（阻塞式）
+//   生成设备ID → 读EEPROM WiFi凭证 → WiFi.begin()阻塞等待 → DHCP确认 → NTP同步
+//   返回: true=WiFi+NTP均就绪  false=WiFi连接超时（后续tick()中自动重连）
 bool NetManager::initBlocking(uint32_t wifiTimeoutMs) {
     _genDeviceId(_deviceId, sizeof(_deviceId));
     LOG("[NET] Device ID: %s\n", _deviceId);
@@ -156,6 +172,8 @@ bool NetManager::syncNtpBlocking(uint32_t timeoutMs) {
 }
 
 // ==================== 启动会话 ====================
+// startSession — 启动数据上传会话
+//   用 NTP 时间戳拼接 deviceId 生成唯一 sessionId，防止同秒重启冲突
 void NetManager::startSession() {
     // 使用 NTP 时间生成 sessionId（毫秒级，避免同一秒重启冲突）
     uint32_t tsSec = getCurrentTimeSec();
@@ -305,7 +323,13 @@ void NetManager::_wifiTick() {
     }
 }
 
-// 记录NTP时间戳（0表示未同步），云端fallback到服务器时间
+// pushDataPoint — 业务层数据推送入口（每帧调用）
+//   功能: 1) NTP未同步时丢弃，避免时间戳为0的脏数据
+//         2) 质量≥30帧 → 计入分钟统计累计
+//         3) 跨分钟边界 → 触发分钟统计上传
+//         4) 数据同时压入批量缓冲区 + 离线重试队列
+//   参数: rms=均方根值(mV), act=激活度(%), mdf=中位频率(Hz),
+//         fatigue=疲劳度(%), quality=信号质量(0-100), calibrated=是否已校准
 bool NetManager::pushDataPoint(float rms, float act,
                                 float mdf, float fatigue, uint8_t quality, bool calibrated) {
     // NTP未同步时跳过上传，避免时间戳为0的脏数据
@@ -657,7 +681,9 @@ float NetManager::_parseFloatField(const String& body, const char* key) {
     return body.substring(start, i).toFloat();
 }
 
-// ==================== 阶段3：拉取云端精炼画像并应用 ====================
+// fetchProfile — 阶段3 拉取云端精炼画像
+//   云端聚合多session生成更稳健的 relax/active 基线，通过回调 _onProfile 覆盖本地
+//   响应字段: relax_rms, relax_mdf, active_rms, active_mdf, end_mdf
 void NetManager::fetchProfile() {
     if (!_onProfile) return;
     // 云端 HTTP 网关仅路由 POST（dataIngest / uploadCalibration / getDeviceCommand
@@ -692,6 +718,8 @@ void NetManager::fetchProfile() {
     _onProfile(relax_rms, active_rms, relax_mdf, active_mdf, end_mdf);
 }
 
+// uploadCalibration — 保存校准结果（内存缓存，后续 save_calib 命令触发云端上传）
+//   参数: relaxRms/Mdf=静息基线, activeRms/Mdf=用力基线
 void NetManager::uploadCalibration(float relaxRms, float relaxMdf,
                                     float activeRms, float activeMdf) {
     _relaxRms = relaxRms;
@@ -729,6 +757,9 @@ void NetManager::updateSavedCredentials(const char* ssid, const char* pass) {
     LOG("[NET] Reconnect credentials updated: %s\n", _savedSsid);
 }
 
+// tick — 非阻塞主循环（每100ms左右调用一次）
+//   执行顺序: WiFi连接维护 → NTP后台同步 → 自动启动会话 → 批量数据上传
+//            → 会话后拉取云端画像（仅一次）→ 3秒命令轮询 → 60秒状态上报
 void NetManager::tick() {
     _wifiTick();
     _handleNtp();
@@ -759,6 +790,10 @@ void NetManager::tick() {
     }
 }
 
+// _checkCommand — 轮询云端命令（每3秒一次）
+//   解析 JSON 响应中的 command 字段，支持: reset_wifi / refresh_status /
+//   record_relax / record_active / save_calib / reset_calib
+//   执行后自动回 ACK 避免重复下发
 void NetManager::_checkCommand() {
     char jsonBody[128];
     snprintf(jsonBody, sizeof(jsonBody),

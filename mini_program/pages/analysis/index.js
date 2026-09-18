@@ -1,4 +1,17 @@
-// pages/analysis/index.js — 疲劳度趋势分析页面
+// pages/analysis/index.js — 疲劳趋势分析页面
+// 职责: 基于时间段的历史数据查询 + 统计分析 + Canvas 折线图 + CSV 导出
+// 数据流程:
+//   1. 前端选日期范围 → 计算 startTs/endTs（UTC+8）
+//   2. cloud.callFunction('queryDataPoints', {startTs, endTs}) → 云函数聚合返回
+//      返回字段: data[] (fatigue/timestamp), firstTs, lastTs, total, downsampled,
+//                goodCount/warnCount/dangerCount (0-30/30-70/70-100 分段计数)
+//   3. 前端固定采样 200 点 → 摘要/结论/趋势三级统计 → Canvas 绘制
+// 统计指标:
+//   - 摘要: 监测时长 / 平均疲劳 / 最大疲劳 / 峰值时间
+//   - 结论: 好(<30)/轻度(30-70)/严重(≥70) 三级，含建议
+//   - 趋势: 前半段 vs 后半段均值差 → 稳定/持续上升/缓慢上升/明显下降/缓慢下降
+// 导出: 分批拉取（pageSize=3000, cursorTs 游标）→ 本地写 CSV → wx.shareFileMessage 发送
+// 图表: Canvas 2D 渐变色折线（绿→橙→红），含阈值虚线 30%/70%，峰值标注
 const { log, warn } = require('../../utils/logger');
 const CLOUD_ENV = 'cloud1-d4gqmimmo05b12c94';
 

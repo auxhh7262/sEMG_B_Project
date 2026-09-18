@@ -1,8 +1,10 @@
 /**
- * logger.js - 小程序日志工具
- * 说明：console.log/warn/error 已在 app.js 中重写，
- *       本文件仅提供命名导出，方便统一引用。
- *       app.js 的重写版本包含批量缓冲机制，性能更优。
+ * utils/logger.js — 日志工具模块
+ * 职责: 轻量级 console 封装，保持统一引用
+ * 说明: console.log/warn/error 已在 app.js 的 onLaunch() 中重写，
+ *       重写版本包含批量缓冲 + 网络转发（性能更优）。
+ *       本文件仅做命名导出，各页面统一 require('utils/logger') 引用。
+ * 导出: log() / warn() / error()
  */
 
 function log(...args) {

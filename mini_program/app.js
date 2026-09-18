@@ -1,4 +1,13 @@
-// app.js
+// app.js — 小程序全局入口
+// 职责: 云开发初始化 + 日志转发（console.log/warn/error 重写 → 批量缓冲 POST 到调试服务器）
+// 关键配置:
+//   - CLOUD_ENV:       云开发环境ID
+//   - LOG_SERVER_URL:  日志调试服务器地址（批量 POST）
+//   - LOG_BATCH_SIZE:  每批缓冲条数 (10)
+//   - LOG_BATCH_INTERVAL: 批量冲刷间隔 (500ms)
+// 模块字段:
+//   - dataMode:        数据模式 ('idle' / 其他)
+//   - onLaunch():      重写 console + 云开发 init + 日志连通性测试
 "use strict";
 
 const CLOUD_ENV = 'cloud1-d4gqmimmo05b12c94';

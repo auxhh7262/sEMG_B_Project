@@ -1,4 +1,20 @@
-// 云函数 uploadCalibration — 固件上传校准结果到 sessions 集合
+// ============================================================
+// 云函数: uploadCalibration — 固件分阶段上传校准结果
+// 架构层: 写入层（sessions 集合校准入口）
+// 触发方: 固件 NetManager.uploadCalibPhase()
+// HTTP路径: POST /uploadCalibration
+// 输入 (JSON):
+//   device_id: 设备标识 "sEMG_XXXX"
+//   phase:     "relax" | "active"
+//   rms:       该阶段 RMS (mV)
+//   mdf:       该阶段 MDF (Hz)
+//   end_mdf:   仅 active 阶段传，用力结束 MDF (Hz)
+// 会话生命周期:
+//   - relax 阶段: 总是创建新 calibrating session，旧 calibrating session 自动 cancelled
+//   - active 阶段: 找到最近 calibrating session → 补全 calibration → 状态变 completed
+// 写入集合: sessions (calibrating → completed)
+// 返回: { code:0 }
+// ============================================================
 const cloud = require('wx-server-sdk');
 cloud.init({ env: 'cloud1-d4gqmimmo05b12c94' });
 const db = cloud.database();

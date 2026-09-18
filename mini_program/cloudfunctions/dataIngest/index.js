@@ -1,11 +1,31 @@
-// 云函数 dataIngest — 固件 HTTP POST 批量上传特征值数据
+// ============================================================
+// 云函数: dataIngest — 固件 HTTP POST 批量上传特征值数据
+// 架构层: 写入层（data_points 集合主写入口）
+// 触发方: 固件 NetManager._httpPost(CLOUD_URL_DATA_INGEST)
+// HTTP路径: POST /dataIngest
+// 输入 (JSON):
+//   points: [[tsSec, ms, rms, act, mdf, fatigue, quality, calibrated?], ...]
+//   - tsSec: NTP Unix 秒级时间戳（> 2023-11-14 视为有效）
+//   - ms:    毫秒部分 0-999
+//   - rms:   RMS 均方根 (mV)
+//   - act:   激活度 (%)
+//   - mdf:   MDF 中位频率 (Hz)
+//   - fatigue: 疲劳度 (%)
+//   - quality: 信号质量 0-100
+//   - calibrated: 1=已校准 0=未校准（可选，旧固件缺省 true）
+// 写入集合: data_points (timestamp, timeStr, rms, activation, mdf, fatigue, quality, calibrated)
+// 并发策略: Promise.all 逐条 add（微信云不支持数组批量），每批 100 条
+// 时间兜底: tsSec 无效时用 serverNowMs + (i+idx)*100 伪造时间戳
+// 返回: { code:0, written:N }
+// ============================================================
 const cloud = require('wx-server-sdk');
 cloud.init({ env: 'cloud1-d4gqmimmo05b12c94' });
 const db = cloud.database();
 
 const BATCH_MAX = 100; // 单次最多写入 100 条
 
-// 字段顺序固定：[timestamp_sec, ms, rms, act, mdf, fatigue, quality]
+// 字段顺序固定：[timestamp_sec, ms, rms, act, mdf, fatigue, quality, calibrated?]
+// calibrated 为可选第 8 元素（1=已校准, 0=未校准），旧固件仅传 7 元素时后端默认 true
 // 全部为真实物理值（rms:mV, act:%, mdf:Hz, fatigue:%），ms 为真实毫秒
 exports.main = async (event, context) => {
   console.log('[dataIngest] RAW event:', JSON.stringify(event));

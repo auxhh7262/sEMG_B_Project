@@ -1,4 +1,15 @@
-// 文件: 0_Base/Globals.h
+// ============================================================
+// 文件名: Globals.h
+// 模块:   基础驱动/全局变量与枚举
+// 职责:   定义系统错误码、设备状态机枚举、网络模式、云端指令、WiFi 凭证结构体及致命错误全局变量的 extern 声明
+// 关键类/函数:
+//   - SystemError_t: 校准流程错误码枚举（力度不足、信号干扰、等待超时、肢体乱动、佩戴松动）
+//   - SystemState_t: 系统主状态枚举（ST_BOOT / ST_RUNNING / ST_ERROR）
+//   - NetMode_t: 网络工作模式枚举（空闲/BLE配网/WiFi连接中/WiFi在线）
+//   - AppCommand_t: 小程序/云端下行指令枚举
+//   - WifiCredentials_t: WiFi SSID + 密码 + 有效性标志
+//   - g_systemFatalError: 全局致命错误状态变量（volatile，跨中断上下文安全）
+// ============================================================
 #ifndef GLOBALS_H
 #define GLOBALS_H
 

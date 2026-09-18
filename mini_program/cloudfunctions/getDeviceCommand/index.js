@@ -1,3 +1,16 @@
+// ============================================================
+// 云函数: getDeviceCommand — 固件短轮询拉取待执行命令
+// 架构层: 查询+状态转移（device_commands: pending→executing）
+// 触发方: 固件 NetManager._checkCommand() 每 3s 调用
+// HTTP路径: POST /getDeviceCommand
+// 输入: device_id
+// 逻辑: 按 created_at 升序(FIFO)取最早一条 pending 命令 → 立即 update 为 executing（防重复取）
+//       选 FIFO 而非最新：校准流程 record_relax → record_active 必须有序
+// 返回: { code:0, command:{ id, command, params, created_at } }
+//       无待执行命令时返回 { code:404, msg:'no pending command' }
+// 集合: device_commands
+// 命令状态机: pending → executing → done(ackDeviceCommand)
+// ============================================================
 // 云函数 getDeviceCommand — 固件短轮询获取待执行命令
 const cloud = require('wx-server-sdk');
 cloud.init({ env: 'cloud1-d4gqmimmo05b12c94' });

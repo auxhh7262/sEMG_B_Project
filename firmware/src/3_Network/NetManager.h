@@ -1,3 +1,17 @@
+// ============================================================
+// 文件名: NetManager.h
+// 模块:   网络通信
+// 职责:   WiFi 连接管理、NTP 校时、云端 HTTP 全链路通信——设备注册、数据批量上传、校准上传、状态上报、云端命令下发与回调派发
+// 关键类/函数:
+//   - NetManager: 网络管理类
+//     - initBlocking(): 阻塞式 WiFi 连接初始化
+//     - syncNtpBlocking() / syncNtpTime(): NTP 时间同步（阻塞 / 非阻塞 tick）
+//     - pushDataPoint(): 单帧数据入批（累积 INGEST_BATCH_FRAMES 后触发上传）
+//     - uploadCalibration() / uploadCalibPhase(): 校准数据分阶段上传
+//     - tick(): 主循环驱动——WiFi 保活、NTP、批量上传、命令轮询、分钟统计上报
+//     - onRecordRelax/onRecordActive/onSaveCalib/onResetCalib: 云端校准命令回调注册
+//     - fetchProfile() / onProfile: 云端纵向画像拉取与应用回调（阶段3）
+// ============================================================
 #ifndef NET_MANAGER_H
 #define NET_MANAGER_H
 
@@ -21,7 +35,7 @@
 // 上传参数
 #define INGEST_BATCH_FRAMES    10    // 每批上传帧数 (1秒 @ 10Hz)
 #define INGEST_RETRY_QUEUE     150   // 断网重试队列最大帧数 (15秒缓存)
-#define WIFI_RETRY_INTERVAL    10000 // WiFi 重连间隔(ms)
+#define WIFI_RETRY_INTERVAL    5000  // WiFi 重连间隔(ms) — 当前值对齐 _wifiTick 硬编码；预留供未来消除硬编码时参数化
 
 class NetManager {
 public:

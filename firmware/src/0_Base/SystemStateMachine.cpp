@@ -1,3 +1,17 @@
+// ============================================================
+// 文件名: SystemStateMachine.cpp
+// 模块: 0_Base 基础模块
+// 职责: 设备三态状态机 + 校准阶段计时
+//       状态流转: BOOT → RUNNING ↔ ERROR（3态，非法转移自动降级为ERROR）
+//       校准阶段: startCalibPhase() 启动倒计时，isCalibPhaseComplete() 查询完成
+// 关键函数:
+//   - init():              重置为 BOOT 态
+//   - transitionTo():      状态转移入口（含合法性校验，非法→ERROR）
+//   - _validTransition():  合法转移表（BOOT→RUNNING, RUNNING↔ERROR, 允许自转移）
+//   - startCalibPhase():   启动校准阶段倒计时（durationSec 秒）
+//   - isCalibPhaseComplete(): 检查倒计时是否结束
+//   - setError():          直接进入 ERROR 态并记录错误消息
+// ============================================================
 #include "SystemStateMachine.h"
 #include "0_Base/Logger.h"
 
@@ -10,6 +24,9 @@ void StateManager::init()
     _errorMsg[0] = '\0';
 }
 
+// _validTransition — 合法转移表
+//   3态简化机: BOOT→RUNNING(唯一出口), RUNNING→ERROR, ERROR→RUNNING
+//   允许自转移（RUNNING→RUNNING），避免 reset_calib 等操作误入 ERROR
 bool StateManager::_validTransition(SystemState_t from, SystemState_t to)
 {
     // 允许自转换（RUNNING→RUNNING），避免 reset_calib 等操作误入 ERROR
@@ -21,6 +38,9 @@ bool StateManager::_validTransition(SystemState_t from, SystemState_t to)
     return false;
 }
 
+// transitionTo — 状态转移入口
+//   校验合法性 → 记录 prev_state → 更新 state → 重置 phaseActive / errorMsg
+//   非法转移自动降级为 ERROR 态，返回 false
 bool StateManager::transitionTo(SystemState_t newState)
 {
     if (!_validTransition(_state, newState)) {
@@ -57,6 +77,8 @@ const char* StateManager::getStateName() const
     }
 }
 
+// startCalibPhase — 启动校准阶段倒计时
+//   记录起始时刻 millis()，设置总时长 durationSec 秒
 void StateManager::startCalibPhase(uint16_t durationSec)
 {
     _phaseStartMs = millis();
@@ -64,6 +86,9 @@ void StateManager::startCalibPhase(uint16_t durationSec)
     _phaseActive = true;
 }
 
+// isCalibPhaseComplete — 检查校准阶段倒计时是否结束
+//   返回: true=已到达 durationSec，业务层应切换到下一阶段
+//   注意: phase 未激活时会打印前10次调试日志（避免刷屏）
 bool StateManager::isCalibPhaseComplete() const
 {
     if (!_phaseActive) {
@@ -93,6 +118,8 @@ uint8_t StateManager::getCalibProgress() const
     return pct;
 }
 
+// setError — 直接进入 ERROR 态并记录错误消息
+//   用于业务层检测到致命错误时的快速降级（跳过 transitionTo 合法性校验）
 void StateManager::setError(const char* msg)
 {
     strncpy(_errorMsg, msg, sizeof(_errorMsg) - 1);

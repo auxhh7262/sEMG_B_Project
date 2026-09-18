@@ -1,3 +1,16 @@
+// ============================================================
+// 云函数: queryDataPoints — 历史数据查询 + CSV 导出
+// 架构层: 查询层（data_points 聚合 + 游标分页）
+// 触发方: 小程序 analysis 页面（onQuery / onExportData）
+// 两种模式:
+//   - 查询模式: { startDate, endDate } → 聚合统计 + 固定 2000 点降采样 + good/warn/danger 计数
+//   - 导出模式: { startTs, endTs, export:true, cursorTs? } → 游标分页（每批 3000 条）
+// 聚合统计: good(fatigue<30) / warn(30-70) / danger(>=70) 分段计数
+// 时间戳计算: 前端 UTC+8 本地计算 → 避免云服务器时区偏差
+// 集合: data_points
+// 返回: 查询 → { code:0, data[], total, goodCount, warnCount, dangerCount }
+//       导出 → { code:0, data[], total, hasMore }
+// ============================================================
 const cloud = require('wx-server-sdk');
 cloud.init({ env: 'cloud1-d4gqmimmo05b12c94' });
 const db = cloud.database();

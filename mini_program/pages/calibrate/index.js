@@ -354,6 +354,24 @@ Page({
     this._startRelaxPhase();
   },
 
+  // ==================== 清除残留校准会话 ====================
+  // C1: 开始校准前，把该设备所有残留的 calibrating session 标为 cancelled。
+  // 避免上一次未完成校准的残留 calibrating session 在云端被本次 relax 上传复用，
+  // 保证本次从全新 session 开始。失败时仅告警（云端已幂等兜底）。
+  async _cancelStaleCalibratingSessions() {
+    if (!wx.cloud || !this._deviceId) return;
+    try {
+      const db = wx.cloud.database({ env: CLOUD_ENV });
+      const res = await db.collection('sessions')
+        .where({ device_id: this._deviceId, status: 'calibrating' })
+        .update({ data: { status: 'cancelled', updated_at: Date.now() } });
+      const updated = res.stats ? res.stats.updated : 0;
+      logger.log('[calibrate] cancelled stale calibrating sessions:', updated);
+    } catch (e) {
+      logger.warn('[calibrate] cancel stale calibrating sessions failed (ignored):', e);
+    }
+  },
+
   async _startRelaxPhase() {
     if (this._commandSent) {
       logger.warn('[calibrate] _startRelaxPhase ignored: command already sent');
@@ -361,6 +379,12 @@ Page({
     }
     this._commandSent = true;
     this._currentSessionId = null;
+
+    // C1: 开始校准前先把该设备残留的 calibrating session 标 cancelled，
+    // 防止上一次未完成校准的残留 session 被本次 relax 上传复用。
+    // 云端 uploadCalibration 的 relax 分支已幂等（复用/更新最近 calibrating），
+    // 此处失败仅告警、不影响主流程（B 仍兜底）。
+    await this._cancelStaleCalibratingSessions();
 
     // 不删除本地 calib_data 缓存：如果用户中途放弃校准，旧数据仍保留
     // setData 已清空页面显示变量，不影响新校准的展示
@@ -394,6 +418,13 @@ Page({
   },
 
   async _startActivePhase() {
+    // C2 守卫：relax 阶段尚未完成（phase 未到 active_ready）时拒绝进入 active，
+    // 避免固件仍在 RELAX 采集期收到 record_active 被 rejected: busy，导致校准卡死
+    if (this.data.phase !== 'active_ready') {
+      logger.warn('[calibrate] _startActivePhase ignored: relax not ready (phase=' + this.data.phase + ')');
+      wx.showToast({ title: '请先完成放松校准', icon: 'none' });
+      return;
+    }
     if (this._commandSent) {
       logger.warn('[calibrate] _startActivePhase ignored: command already sent');
       return;
@@ -615,6 +646,19 @@ Page({
           this._currentSessionId = session._id;
           logger.log('[calibrate] found new calibrating session, tracking id:', session._id);
         }
+      }
+
+      // C2 防御：若本次绑定的 session 被标为 cancelled（异常路径，B 修复后正常不再发生），
+      // 立即失败提示，不再傻等 30s 超时让用户困惑
+      if (session && session.status === 'cancelled') {
+        logger.warn('[calibrate] session cancelled, abort calibration:', this._currentSessionId);
+        this._clearPhaseTimeout();
+        this._stopPolling();
+        this._stopDataWatch();
+        this._commandSent = false;
+        this.setData({ phase: 'idle', statusText: '校准会话已失效，请重试' });
+        wx.showToast({ title: '校准会话已失效，请重试', icon: 'none' });
+        return;
       }
 
       if (session && session.calibration) {

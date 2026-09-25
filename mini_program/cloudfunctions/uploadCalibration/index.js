@@ -10,7 +10,8 @@
 //   mdf:       该阶段 MDF (Hz)
 //   end_mdf:   仅 active 阶段传，用力结束 MDF (Hz)
 // 会话生命周期:
-//   - relax 阶段: 总是创建新 calibrating session，旧 calibrating session 自动 cancelled
+//   - relax 阶段: 幂等复用/更新该设备最近的 calibrating session（更新 relax 字段），
+//                 不新建、不把旧 session 标 cancelled（修复重试双发/跨校准残留破坏 session 的竞态）
 //   - active 阶段: 找到最近 calibrating session → 补全 calibration → 状态变 completed
 // 写入集合: sessions (calibrating → completed)
 // 返回: { code:0 }
@@ -55,22 +56,30 @@ exports.main = async (event, context) => {
       .get();
 
     if (phase === 'relax' && relax_rms !== undefined) {
-      // relax 阶段：总是创建新 session，同时把旧的 calibrating session 标记为 cancelled
+      // relax 阶段：幂等复用该设备最近的 calibrating session（更新 relax 字段），
+      // 不再创建新 session、也不再把旧 session 标 cancelled。
+      // 修复：固件 HTTP 重试双发、或上一次校准残留的 calibrating session 都会导致
+      // 旧逻辑「标旧 cancelled + 新建」破坏小程序正在绑定的 session，引发校准超时。
       if (data.length > 0) {
-        await coll.doc(data[0]._id).update({
-          data: { status: 'cancelled', updated_at: now }
+        const session = data[0];
+        await coll.doc(session._id).update({
+          data: {
+            calibration: { ...session.calibration, relax_rms, relax_mdf },
+            updated_at: now,
+          }
         });
-        console.log('[uploadCalibration] cancelled old session', data[0]._id);
+        console.log('[uploadCalibration] updated existing calibrating session (relax)', session._id);
+      } else {
+        const doc = {
+          device_id,
+          status: 'calibrating',
+          calibration: { relax_rms, relax_mdf },
+          started_at: now,
+          updated_at: now,
+        };
+        const res = await coll.add({ data: doc });
+        console.log('[uploadCalibration] created new session (relax)', res._id);
       }
-      const doc = {
-        device_id,
-        status: 'calibrating',
-        calibration: { relax_rms, relax_mdf },
-        started_at: now,
-        updated_at: now,
-      };
-      const res = await coll.add({ data: doc });
-      console.log('[uploadCalibration] created new session (relax)', res._id);
 
     } else if (phase === 'active' && active_rms !== undefined) {
       // active 阶段：更新最近的 calibrating session
